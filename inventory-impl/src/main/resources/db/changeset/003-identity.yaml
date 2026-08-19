@@ -1,0 +1,96 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-identity
+      author: phase-15
+      comment: >
+        Users, the bearer tokens that guard the API, and federated identities.
+        (provider, subject) is the stable key — email is profile data, because
+        providers like Apple hand out per-app relay addresses.
+      changes:
+        - createTable:
+            tableName: users
+            columns:
+              - column:
+                  name: id
+                  type: varchar(26)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: email
+                  type: text
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_users_email
+              - column:
+                  name: display_name
+                  type: text
+              - column:
+                  name: password_hash
+                  type: text
+              - column:
+                  name: admin
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+        - createTable:
+            tableName: api_tokens
+            columns:
+              - column:
+                  name: token
+                  type: text
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: varchar(26)
+                  constraints:
+                    nullable: false
+                    references: users(id)
+                    foreignKeyName: fk_tokens_user
+                    deleteCascade: true
+              - column:
+                  name: issued_at
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+              - column:
+                  name: revoked
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+        - createTable:
+            tableName: user_identities
+            columns:
+              - column:
+                  name: provider
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: subject
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: user_id
+                  type: varchar(26)
+                  constraints:
+                    nullable: false
+                    references: users(id)
+                    foreignKeyName: fk_identities_user
+                    deleteCascade: true
+        - addPrimaryKey:
+            tableName: user_identities
+            columnNames: provider, subject
+            constraintName: pk_user_identities
+        - createIndex:
+            tableName: user_identities
+            indexName: idx_identities_user
+            columns:
+              - column:
+                  name: user_id

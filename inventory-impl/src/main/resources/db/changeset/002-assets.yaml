@@ -1,0 +1,220 @@
+databaseChangeLog:
+  - changeSet:
+      id: 002-assets
+      author: phase-15
+      comment: >
+        Arbitrary file attachments (pictures, audio, PDFs, archives — any
+        content type) and the spatial boxes drawn on picture assets.
+
+        attached_at is fixed at first attach; updated_at defaults to it and
+        moves when the asset is replaced. Replacement archives the superseded
+        bytes + metadata into asset_archive IN THE SAME TRANSACTION; the
+        asset.replace audit event references the archive row (archiveId)
+        rather than carrying the bytes — audit_events is the replay log every
+        bus consumer pages, and multi-MB base64 rows there would tax every
+        replay forever. Archives deliberately carry NO foreign keys: history
+        must survive the deletion of the asset (and item) it once was.
+
+        Amended in place 2026-08-15 (kind column, ongoing item 3) under the
+        same no-data-deployed license as the Phase 15 schema collapse itself.
+      changes:
+        - createTable:
+            tableName: assets
+            columns:
+              - column:
+                  name: id
+                  type: varchar(26)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: item_id
+                  type: varchar(26)
+                  constraints:
+                    nullable: false
+                    references: items(id)
+                    foreignKeyName: fk_assets_item
+                    deleteCascade: true
+              - column:
+                  name: filename
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: content_type
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: size_bytes
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: data
+                  type: bytea
+                  constraints:
+                    nullable: false
+              # capture coordinates: explicit client value (phone GPS) or EXIF
+              - column:
+                  name: latitude
+                  type: double precision
+              - column:
+                  name: longitude
+                  type: double precision
+              - column:
+                  name: attached_at
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+              # how the asset is USED (free-form like items.type): 'photo'
+              # (annotator boxes become items) or 'map' (boxes become places)
+              - column:
+                  name: kind
+                  type: text
+                  defaultValue: photo
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: assets
+            indexName: idx_assets_item
+            columns:
+              - column:
+                  name: item_id
+        - createTable:
+            tableName: asset_regions
+            columns:
+              - column:
+                  name: id
+                  type: varchar(26)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: asset_id
+                  type: varchar(26)
+                  constraints:
+                    nullable: false
+                    references: assets(id)
+                    foreignKeyName: fk_regions_asset
+                    deleteCascade: true
+              - column:
+                  name: x
+                  type: double precision
+                  constraints:
+                    nullable: false
+              - column:
+                  name: y
+                  type: double precision
+                  constraints:
+                    nullable: false
+              - column:
+                  name: w
+                  type: double precision
+                  constraints:
+                    nullable: false
+              - column:
+                  name: h
+                  type: double precision
+                  constraints:
+                    nullable: false
+              - column:
+                  name: item_id
+                  type: varchar(26)
+              - column:
+                  name: label
+                  type: text
+              - column:
+                  name: ts
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+        # the box survives as a bare region when its item is deleted
+        - addForeignKeyConstraint:
+            baseTableName: asset_regions
+            baseColumnNames: item_id
+            referencedTableName: items
+            referencedColumnNames: id
+            constraintName: fk_regions_item
+            onDelete: SET NULL
+        - createIndex:
+            tableName: asset_regions
+            indexName: idx_regions_asset
+            columns:
+              - column:
+                  name: asset_id
+        # superseded asset versions; audit_events.details.archiveId points here
+        - createTable:
+            tableName: asset_archive
+            columns:
+              - column:
+                  name: id
+                  type: varchar(26)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: asset_id
+                  type: varchar(26)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: item_id
+                  type: varchar(26)
+              - column:
+                  name: filename
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: content_type
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: size_bytes
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: data
+                  type: bytea
+                  constraints:
+                    nullable: false
+              - column:
+                  name: latitude
+                  type: double precision
+              - column:
+                  name: longitude
+                  type: double precision
+              - column:
+                  name: attached_at
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+              - column:
+                  name: archived_at
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+              - column:
+                  name: audit_event_id
+                  type: varchar(26)
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: asset_archive
+            indexName: idx_archive_asset
+            columns:
+              - column:
+                  name: asset_id

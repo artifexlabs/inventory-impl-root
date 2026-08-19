@@ -1,0 +1,45 @@
+databaseChangeLog:
+  - changeSet:
+      id: 005-item-identities
+      author: ongoing-7
+      comment: >
+        Physical markers resolving to items: one (kind, value) -> item_id
+        mapping for every marker type (nfc-uid, upc, foreign qr, ...), the
+        same shape as user_identities(provider, subject) rather than a
+        bespoke column per marker. A marker claims at most one item.
+      changes:
+        - createTable:
+            tableName: item_identities
+            columns:
+              - column:
+                  name: kind
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: value
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: item_id
+                  type: varchar(26)
+                  constraints:
+                    nullable: false
+                    references: items(id)
+                    foreignKeyName: fk_item_identities_item
+                    deleteCascade: true
+        - addPrimaryKey:
+            tableName: item_identities
+            columnNames: kind, value
+            constraintName: pk_item_identities
+        # list an item's markers without a full scan
+        - createIndex:
+            tableName: item_identities
+            indexName: idx_item_identities_item
+            columns:
+              - column:
+                  name: item_id
+      rollback:
+        - dropTable:
+            tableName: item_identities

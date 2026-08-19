@@ -1,0 +1,66 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-audit
+      author: phase-15
+      comment: >
+        The append-only audit trail — and, since VERTICLES.md, the durable
+        event log consumers replay from.
+
+        seq is an identity column assigned at INSERT, so it tracks commit
+        order where the ULID id (assigned pre-commit) may not; consumers page
+        by seq with a small overlap. Declared inside createTable, where
+        Liquibase expands auto-increment properly.
+      changes:
+        - createTable:
+            tableName: audit_events
+            columns:
+              - column:
+                  name: id
+                  type: varchar(26)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: seq
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    nullable: false
+              - column:
+                  name: ts
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+              - column:
+                  name: principal
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: action
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: target_id
+                  type: text
+                  constraints:
+                    nullable: false
+              # asset.replace details carry an archiveId reference into
+              # asset_archive — never the bytes; consumers page this table
+              - column:
+                  name: details
+                  type: jsonb
+        - createIndex:
+            tableName: audit_events
+            indexName: idx_audit_target
+            columns:
+              - column:
+                  name: target_id
+        - createIndex:
+            tableName: audit_events
+            indexName: ix_audit_seq
+            unique: true
+            columns:
+              - column:
+                  name: seq

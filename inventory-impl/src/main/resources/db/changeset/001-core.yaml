@@ -1,0 +1,155 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-core
+      author: phase-15
+      comment: >
+        Items and their tags. Phase 15 collapsed the accreted 001-013 changesets
+        into four that express the END state — no data was ever deployed, so
+        there was nothing to migrate and no reason to keep the archaeology.
+
+        Containment is a TREE, not a graph: container_id is a single optional
+        self-reference, because a physical thing is in exactly one place. The
+        old locations table and item_containment join table are gone — a
+        location is simply a container that carries coordinates, and items
+        without their own coordinates inherit the nearest ancestor's.
+      changes:
+        - createTable:
+            tableName: items
+            columns:
+              - column:
+                  name: id
+                  type: varchar(26)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: display_name
+                  type: text
+              - column:
+                  name: type
+                  type: text
+                  defaultValue: "_"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: description
+                  type: text
+              # single optional parent; orphaning on delete beats cascading a
+              # subtree into oblivion because a shelf was removed
+              - column:
+                  name: container_id
+                  type: varchar(26)
+              # own coordinates; absent means "inherit from the container chain"
+              - column:
+                  name: latitude
+                  type: double precision
+              - column:
+                  name: longitude
+                  type: double precision
+              # human judgment ("two-person lift"), NOT derived from weight_grams
+              - column:
+                  name: heavy
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: expires_at
+                  type: timestamptz
+              # true = hard stop; false = a recommendation
+              - column:
+                  name: expiration_absolute
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: data_kind
+                  type: text
+              - column:
+                  name: data_mutable
+                  type: boolean
+              - column:
+                  name: data_archive
+                  type: boolean
+              - column:
+                  name: quantity
+                  type: bigint
+              - column:
+                  name: weight_grams
+                  type: double precision
+              - column:
+                  name: length_cm
+                  type: double precision
+              - column:
+                  name: width_cm
+                  type: double precision
+              - column:
+                  name: height_cm
+                  type: double precision
+              - column:
+                  name: min_on_hand
+                  type: bigint
+              - column:
+                  name: max_on_hand
+                  type: bigint
+              - column:
+                  name: ts
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+        - addForeignKeyConstraint:
+            baseTableName: items
+            baseColumnNames: container_id
+            referencedTableName: items
+            referencedColumnNames: id
+            constraintName: fk_items_container
+            onDelete: SET NULL
+        - createIndex:
+            tableName: items
+            indexName: idx_items_type
+            columns:
+              - column:
+                  name: type
+        - createIndex:
+            tableName: items
+            indexName: idx_items_container
+            columns:
+              - column:
+                  name: container_id
+        # key with optional value: "scuba" renders bare, "color=orange" with it
+        - createTable:
+            tableName: item_tags
+            columns:
+              - column:
+                  name: item_id
+                  type: varchar(26)
+                  constraints:
+                    nullable: false
+                    references: items(id)
+                    foreignKeyName: fk_tags_item
+                    deleteCascade: true
+              - column:
+                  name: tag_key
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: tag_value
+                  type: text
+        - addPrimaryKey:
+            tableName: item_tags
+            columnNames: item_id, tag_key
+            constraintName: pk_item_tags
+        # search by key existence across the whole inventory
+        - createIndex:
+            tableName: item_tags
+            indexName: idx_tags_key
+            columns:
+              - column:
+                  name: tag_key

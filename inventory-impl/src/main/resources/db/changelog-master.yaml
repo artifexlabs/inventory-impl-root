@@ -1,0 +1,17 @@
+databaseChangeLog:
+  # Phase 15 (2026-08-15) collapsed the accreted 001-locations … 013-audit-seq
+  # changesets into these four. No data had ever been deployed, so the history
+  # was pure archaeology: these express the schema as it should have been, with
+  # unified containment (items form a tree; a location is a container carrying
+  # coordinates) rather than a separate locations table and a join table.
+  - include:
+      file: db/changeset/001-core.yaml
+  - include:
+      file: db/changeset/002-assets.yaml
+  - include:
+      file: db/changeset/003-identity.yaml
+  - include:
+      file: db/changeset/004-audit.yaml
+  # Ongoing item 7 (2026-08-15): physical markers (NFC/UPC/QR) -> item
+  - include:
+      file: db/changeset/005-item-identities.yaml
