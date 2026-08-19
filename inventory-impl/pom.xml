@@ -57,17 +57,14 @@
       <!-- QR rendering happens beside the label printer, in the labels worker -->
       <groupId>com.google.zxing</groupId>
       <artifactId>core</artifactId>
-      <version>3.5.3</version>
     </dependency>
     <dependency>
       <groupId>com.google.zxing</groupId>
       <artifactId>javase</artifactId>
-      <version>3.5.3</version>
     </dependency>
     <dependency>
       <groupId>at.favre.lib</groupId>
       <artifactId>bcrypt</artifactId>
-      <version>0.10.2</version>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
