@@ -50,6 +50,7 @@
   </distributionManagement>
   <modules>
     <module>inventory-impl</module>
+    <module>inventory-impl-changeset</module>
     <module>inventory-impl-pg</module>
   </modules>
 </project>

@@ -5,13 +5,17 @@ Aggregator for the inventory implementation modules, released together as
 
 - **inventory-impl** — core: domain implementations, in-memory twins, bus
   verticles, label/QR/catalog machinery, `Gtin`/`Ulid`.
-- **inventory-impl-pg** — the `Pg*` Postgres backends plus the Liquibase
-  changelogs (shipped inside the jar under `db/`), depends on core.
+- **inventory-impl-changeset** — the schema as a versioned artifact: the
+  Liquibase changelogs (`db/**`) and nothing else — no code, no
+  dependencies. Consumers bring their own Liquibase.
+- **inventory-impl-pg** — the `Pg*` Postgres backends; depends on core and
+  on the changeset artifact (so the changelog rides every Pg classpath).
 
 The memory/Pg parity tests run in a single reactor pass here, which is the
 reason the modules share a repo and a version. Consumers that talk to
-Postgres depend on `inventory-impl-pg` (core arrives transitively);
-memory-only consumers depend on `inventory-impl`.
+Postgres depend on `inventory-impl-pg` (core and the changelog arrive
+transitively); memory-only consumers depend on `inventory-impl`;
+migration tooling can depend on `inventory-impl-changeset` alone.
 
 Part of the inventory workspace — see `MAVEN_RELEASES.md` in
 [inventory-root](https://github.com/mykelalvis/inventory-root) for the
