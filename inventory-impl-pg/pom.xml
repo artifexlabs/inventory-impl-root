@@ -25,53 +25,52 @@
     <artifactId>inventory-impl-root</artifactId>
     <version>0.1.0-SNAPSHOT</version>
   </parent>
-  <artifactId>inventory-impl</artifactId>
+  <artifactId>inventory-impl-pg</artifactId>
   <name>${project.artifactId}</name>
-  <description>Default implementations for the inventory API: domain impls,
-    in-memory twins, bus verticles, label/QR/catalog machinery. Postgres
-    backends and changelogs live in inventory-impl-pg.</description>
-  <url>${github.url.base}/${project.artifactId}</url>
-  <scm>
-    <connection>scm:git:${git.url}</connection>
-    <url>scm:git:${git.url}</url>
-    <developerConnection>scm:git:${git.url}</developerConnection>
-    <tag>HEAD</tag>
-  </scm>
-  <distributionManagement>
-    <site>
-      <id>central</id>
-      <url>${site.target.url}/</url>
-    </site>
-  </distributionManagement>
+  <description>Postgres backends for the inventory API (Pg* domain systems)
+    plus the Liquibase changelogs, shipped in this jar under db/ so schema
+    and SQL travel with the code that speaks it.</description>
   <dependencies>
     <dependency>
       <groupId>io.artifexlabs.inventory</groupId>
-      <artifactId>inventory-api</artifactId>
+      <artifactId>inventory-impl</artifactId>
+      <version>${project.version}</version>
     </dependency>
     <dependency>
-      <!-- bus workers (impl.bus): verticles + envelope wire types -->
-      <groupId>io.vertx</groupId>
-      <artifactId>vertx-core</artifactId>
+      <groupId>io.smallrye.reactive</groupId>
+      <artifactId>smallrye-mutiny-vertx-pg-client</artifactId>
     </dependency>
     <dependency>
-      <!-- QR rendering happens beside the label printer, in the labels worker -->
-      <groupId>com.google.zxing</groupId>
-      <artifactId>core</artifactId>
-      <version>3.5.3</version>
-    </dependency>
-    <dependency>
-      <groupId>com.google.zxing</groupId>
-      <artifactId>javase</artifactId>
-      <version>3.5.3</version>
-    </dependency>
-    <dependency>
-      <groupId>at.favre.lib</groupId>
-      <artifactId>bcrypt</artifactId>
-      <version>0.10.2</version>
+      <!-- shared test fixtures (GpsJpeg etc.) ride core's attached tests-jar -->
+      <groupId>io.artifexlabs.inventory</groupId>
+      <artifactId>inventory-impl</artifactId>
+      <version>${project.version}</version>
+      <type>test-jar</type>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.liquibase</groupId>
+      <artifactId>liquibase-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>

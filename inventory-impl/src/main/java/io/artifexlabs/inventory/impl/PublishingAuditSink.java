@@ -30,7 +30,7 @@ import io.artifexlabs.inventory.api.events.EventPublisher;
  * as a domain fact once the record completes. This covers the paths that
  * flow through the sink — the in-memory systems and the resource-layer
  * standalone events ({@code label.print}, {@code user.*}, {@code
- * token.revoke} via {@link PgAudit}) — while the Pg domain systems, whose
+ * token.revoke} via {@code PgAudit}, now in inventory-impl-pg) — while the Pg domain systems, whose
  * audit rows are written inside their own transactions, publish after
  * commit themselves.
  */

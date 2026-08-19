@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+
+    @formatter:off
+    Copyright © 2019 admin (admin@artifexlabs.io)
+
+    Licensed under the Apache License, Version 2.0 (the "License");
+    you may not use this file except in compliance with the License.
+    You may obtain a copy of the License at
+
+        http://www.apache.org/licenses/LICENSE-2.0
+
+    Unless required by applicable law or agreed to in writing, software
+    distributed under the License is distributed on an "AS IS" BASIS,
+    WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+    See the License for the specific language governing permissions and
+    limitations under the License.
+    @formatter:on
+
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.artifexlabs.inventory</groupId>
+    <artifactId>inventory-parent</artifactId>
+    <version>1-SNAPSHOT</version>
+    <relativePath/>
+  </parent>
+  <artifactId>inventory-impl-root</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+  <name>${project.artifactId}</name>
+  <description>Aggregator releasing the inventory impl modules as ONE version:
+    core (domain impls, memory twins, bus verticles, label/QR/catalog
+    machinery) and -pg (Postgres backends + Liquibase changelogs). The
+    memory/Pg parity tests run in a single reactor pass here — artifact
+    separation without version separation (MAVEN_RELEASES.md).</description>
+  <url>${github.url.base}/${project.artifactId}</url>
+  <scm>
+    <connection>scm:git:${git.url}</connection>
+    <url>scm:git:${git.url}</url>
+    <developerConnection>scm:git:${git.url}</developerConnection>
+    <tag>HEAD</tag>
+  </scm>
+  <distributionManagement>
+    <site>
+      <id>central</id>
+      <url>${site.target.url}/</url>
+    </site>
+  </distributionManagement>
+  <modules>
+    <module>inventory-impl</module>
+    <module>inventory-impl-pg</module>
+  </modules>
+</project>
