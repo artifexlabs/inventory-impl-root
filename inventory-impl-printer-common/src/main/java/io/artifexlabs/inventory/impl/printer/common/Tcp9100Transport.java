@@ -22,10 +22,9 @@ import java.net.InetSocketAddress;
 import java.net.Socket;
 
 /**
- * Stage 3 of the label pipeline: deliver encoded printer commands over raw
- * TCP (the JetDirect/port-9100 convention both the Brother P750W's print
- * server and networked Zebras speak). Fire-and-forget: the printer does not
- * acknowledge at this layer.
+ * Stage 3 of the label pipeline: deliver encoded printer commands over raw TCP (the JetDirect/port-9100 convention both
+ * the Brother P750W's print server and networked Zebras speak). Fire-and-forget: the printer does not acknowledge at
+ * this layer.
  */
 public class Tcp9100Transport {
 

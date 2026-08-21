@@ -33,10 +33,9 @@ import io.artifexlabs.inventory.api.TokenInfo;
 import io.artifexlabs.inventory.api.TokenService;
 
 /**
- * In-memory {@link TokenService} for dev and test profiles. Tokens are ULIDs;
- * {@link #seed(String, InventoryUser)} installs a well-known token (the
- * configured dev token) so local flows work without logging in first.
- * Revocation keeps the record, mirroring the Postgres implementation.
+ * In-memory {@link TokenService} for dev and test profiles. Tokens are ULIDs; {@link #seed(String, InventoryUser)}
+ * installs a well-known token (the configured dev token) so local flows work without logging in first. Revocation keeps
+ * the record, mirroring the Postgres implementation.
  *
  * @author mykel
  *
@@ -55,8 +54,7 @@ public class InMemoryTokenService implements TokenService {
   @Override
   public CompletionStage<Optional<InventoryUser>> authenticate(String token) {
     Stored s = token == null ? null : this.tokens.get(token);
-    return CompletableFuture
-        .completedStage(s == null || s.info().revoked() ? Optional.empty() : Optional.of(s.user()));
+    return CompletableFuture.completedStage(s == null || s.info().revoked() ? Optional.empty() : Optional.of(s.user()));
   }
 
   @Override
@@ -68,7 +66,9 @@ public class InMemoryTokenService implements TokenService {
 
   @Override
   public CompletionStage<Boolean> revoke(String token) {
-    boolean[] did = { false };
+    boolean[] did = {
+        false
+    };
     this.tokens.computeIfPresent(token, (k, s) -> {
       if (s.info().revoked())
         return s;
@@ -81,7 +81,6 @@ public class InMemoryTokenService implements TokenService {
   @Override
   public CompletionStage<List<TokenInfo>> tokensFor(String userId) {
     return CompletableFuture.completedStage(this.tokens.values().stream().map(Stored::info)
-        .filter(i -> i.userId().equals(userId)).sorted(Comparator.comparing(TokenInfo::issuedAt).reversed())
-        .toList());
+        .filter(i -> i.userId().equals(userId)).sorted(Comparator.comparing(TokenInfo::issuedAt).reversed()).toList());
   }
 }

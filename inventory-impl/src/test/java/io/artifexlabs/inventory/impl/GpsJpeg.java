@@ -20,9 +20,8 @@ package io.artifexlabs.inventory.impl;
 import java.io.ByteArrayOutputStream;
 
 /**
- * Builds a minimal-but-valid JPEG whose only content is an EXIF APP1 segment
- * with a GPS IFD (little-endian TIFF). Just enough structure for a GPS
- * extractor to chew on; no pixels.
+ * Builds a minimal-but-valid JPEG whose only content is an EXIF APP1 segment with a GPS IFD (little-endian TIFF). Just
+ * enough structure for a GPS extractor to chew on; no pixels.
  */
 final class GpsJpeg {
 

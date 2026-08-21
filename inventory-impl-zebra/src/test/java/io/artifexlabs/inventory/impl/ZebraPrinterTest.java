@@ -92,13 +92,11 @@ public class ZebraPrinterTest {
       Item located = DefaultItem.builder().id("01ARZ3NDEKTSV4RRFFQ69G5FAV").name("smoke-item").type("tool")
           .containerId("loc-1").timestamp(java.time.Instant.parse("2026-08-09T00:00:00Z")).build();
       var looked = new java.util.concurrent.atomic.AtomicReference<String>();
-      ZebraPrinter printer = new ZebraPrinter("localhost", fake.getLocalPort(), "large")
-          .withContainerLookup(id -> {
-            looked.set(id);
-            return CompletableFuture.completedStage(java.util.Optional.of(DefaultItem.builder().id(id)
-                .name("garage").type("location")
-                .timestamp(java.time.Instant.parse("2026-08-09T00:00:00Z")).build()));
-          });
+      ZebraPrinter printer = new ZebraPrinter("localhost", fake.getLocalPort(), "large").withContainerLookup(id -> {
+        looked.set(id);
+        return CompletableFuture.completedStage(java.util.Optional.of(DefaultItem.builder().id(id).name("garage")
+            .type("location").timestamp(java.time.Instant.parse("2026-08-09T00:00:00Z")).build()));
+      });
       CompletableFuture<byte[]> received = CompletableFuture.supplyAsync(() -> {
         try (var socket = fake.accept()) {
           return socket.getInputStream().readAllBytes();
@@ -146,13 +144,11 @@ public class ZebraPrinterTest {
   @Test
   public void twoXLargeFormatCarriesTheFullItem() throws Exception {
     try (ServerSocket fake = new ServerSocket(0)) {
-      Item full = DefaultItem.builder().id("01ARZ3NDEKTSV4RRFFQ69G5FAV").name("crate").type("container")
-          .quantity(2).heavy(true)
-          .coordinates(new io.artifexlabs.inventory.api.LatLong(34.12345, -86.54321))
+      Item full = DefaultItem.builder().id("01ARZ3NDEKTSV4RRFFQ69G5FAV").name("crate").type("container").quantity(2)
+          .heavy(true).coordinates(new io.artifexlabs.inventory.api.LatLong(34.12345, -86.54321))
           .tags(java.util.Set.of(new io.artifexlabs.inventory.api.ItemTag("scuba", null),
               new io.artifexlabs.inventory.api.ItemTag("color", "orange")))
-          .description("wrapping description text")
-          .timestamp(java.time.Instant.parse("2026-08-09T00:00:00Z")).build();
+          .description("wrapping description text").timestamp(java.time.Instant.parse("2026-08-09T00:00:00Z")).build();
       CompletableFuture<byte[]> received = CompletableFuture.supplyAsync(() -> {
         try (var socket = fake.accept()) {
           return socket.getInputStream().readAllBytes();

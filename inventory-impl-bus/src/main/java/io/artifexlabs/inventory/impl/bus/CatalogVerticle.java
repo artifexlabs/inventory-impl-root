@@ -33,11 +33,9 @@ import io.artifexlabs.inventory.api.Gtin;
 import io.vertx.core.json.JsonObject;
 
 /**
- * External-catalog lookups and the one-shot create-from-UPC over the bus.
- * The catalog is PREFILL, never a dependency: a miss (or {@code off}) still
- * creates the item from the request fields alone. The image is downloaded
- * BEFORE the transaction, and only from URLs our own adapters produced —
- * never from client-supplied URLs (SSRF).
+ * External-catalog lookups and the one-shot create-from-UPC over the bus. The catalog is PREFILL, never a dependency: a
+ * miss (or {@code off}) still creates the item from the request fields alone. The image is downloaded BEFORE the
+ * transaction, and only from URLs our own adapters produced — never from client-supplied URLs (SSRF).
  */
 public class CatalogVerticle extends ServiceVerticle {
 
@@ -68,8 +66,7 @@ public class CatalogVerticle extends ServiceVerticle {
               .badRequest("name is required — no catalog knows " + gtin + ", so nothing can prefill it");
         String displayName = firstNonBlank(data.getString("displayName"), displayNameFrom(entry, name));
         String type = firstNonBlank(data.getString("type"), "thing");
-        String description = firstNonBlank(data.getString("description"),
-            entry == null ? null : entry.description());
+        String description = firstNonBlank(data.getString("description"), entry == null ? null : entry.description());
         Double weightGrams = data.getDouble("weightGrams") != null ? data.getDouble("weightGrams")
             : entry == null ? null : entry.weightGrams();
         var spec = new UpcItemCreation(gtin, name, displayName, type, description, weightGrams,
@@ -78,21 +75,19 @@ public class CatalogVerticle extends ServiceVerticle {
             ? CompletableFuture.completedStage(Optional.empty())
             : CatalogImages.fetch(entry.imageUrl());
         // the write is one atomic storage operation; this verticle only
-         // performs the external lookup that precedes it (PLAN.md Phase 21, ask 2)
+        // performs the external lookup that precedes it (PLAN.md Phase 21, ask 2)
         JsonObject specJson = new JsonObject().put("gtin13", spec.gtin13()).put("name", spec.name())
-            .put("displayName", spec.displayName()).put("type", spec.type())
-            .put("description", spec.description()).put("weightGrams", spec.weightGrams())
-            .put("containerId", spec.containerId())
-            .put("tags", new io.vertx.core.json.JsonArray(spec.tags().stream()
-                .map(io.artifexlabs.inventory.api.ItemTag::toJson).toList()));
+            .put("displayName", spec.displayName()).put("type", spec.type()).put("description", spec.description())
+            .put("weightGrams", spec.weightGrams()).put("containerId", spec.containerId())
+            .put("tags", new io.vertx.core.json.JsonArray(
+                spec.tags().stream().map(io.artifexlabs.inventory.api.ItemTag::toJson).toList()));
         return image.thenCompose(img -> storage(env, StorageVerticle.ASSETS_CREATE_FROM_UPC, null,
             new JsonObject().put("spec", specJson)
                 .put("filename", img.isPresent() ? "upc-" + gtin + imageExtension(img.get().contentType()) : null)
                 .put("contentType", img.map(CatalogImages.Image::contentType).orElse(null))
                 .put("bytes", img.map(CatalogImages.Image::bytes).orElse(null))));
       }).exceptionally(e -> {
-        Throwable cause = e instanceof java.util.concurrent.CompletionException && e.getCause() != null
-            ? e.getCause()
+        Throwable cause = e instanceof java.util.concurrent.CompletionException && e.getCause() != null ? e.getCause()
             : e;
         if (cause instanceof IllegalStateException conflict)
           throw BusServiceException.conflict(conflict.getMessage());
@@ -120,8 +115,7 @@ public class CatalogVerticle extends ServiceVerticle {
   private static String displayNameFrom(CatalogEntry entry, String name) {
     if (entry == null || entry.brand() == null)
       return null;
-    return name.toLowerCase(java.util.Locale.ROOT).startsWith(entry.brand().toLowerCase(java.util.Locale.ROOT))
-        ? null
+    return name.toLowerCase(java.util.Locale.ROOT).startsWith(entry.brand().toLowerCase(java.util.Locale.ROOT)) ? null
         : entry.brand() + " " + name;
   }
 

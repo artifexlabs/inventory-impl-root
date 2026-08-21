@@ -18,27 +18,30 @@
     @formatter:on
 
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
+
   <parent>
     <groupId>io.artifexlabs.inventory</groupId>
     <artifactId>inventory-impl-root</artifactId>
     <version>0.1.0-SNAPSHOT</version>
   </parent>
+
   <artifactId>inventory-impl-bus</artifactId>
+
   <name>${project.artifactId}</name>
   <description>The event-bus layer: every worker verticle, the admission
     guard, the envelope wire types, and the publishers. Depends on the API
     contracts, Vert.x, and the label-rendering plumbing — and deliberately
     NOT on any domain implementation, so the build itself enforces that the
     protocol layer cannot see Postgres from memory (MORE_VERTX).</description>
+
   <dependencies>
     <dependency>
       <groupId>io.artifexlabs.inventory</groupId>
       <artifactId>inventory-api</artifactId>
     </dependency>
-    <dependency>
-      <!-- QrCodes: the labels worker renders the code the printer prints -->
+    <dependency><!-- QrCodes: the labels worker renders the code the printer prints -->
       <groupId>io.artifexlabs.inventory</groupId>
       <artifactId>inventory-impl-printer-common</artifactId>
       <version>${project.version}</version>

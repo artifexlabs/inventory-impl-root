@@ -73,8 +73,8 @@ public class InMemoryInventorySystemTest {
   @Test
   public void testUpdate() throws Exception {
     Item created = await(this.system.createItem("wrench", null, "tool"));
-    Item updated = DefaultItem.builder(created).description("a good wrench").quantity(4L)
-        .weight(Weight.ofPounds(1.5)).build();
+    Item updated = DefaultItem.builder(created).description("a good wrench").quantity(4L).weight(Weight.ofPounds(1.5))
+        .build();
 
     assertTrue(await(this.system.updateItem(updated)));
     Item read = await(this.system.getItem(created.getId())).get();
@@ -128,8 +128,9 @@ public class InMemoryInventorySystemTest {
     assertFalse(await(this.system.addToContainer(bin.getId(), box.getId())), "cycle refused");
     // ...and updateItem cannot smuggle the same cycle in via containerId
     Item boxNow = await(this.system.getItem(box.getId())).get();
-    assertFalse(await(this.system.updateItem(
-        io.artifexlabs.inventory.api.DefaultItem.builder(boxNow).containerId(bin.getId()).build())),
+    assertFalse(
+        await(this.system
+            .updateItem(io.artifexlabs.inventory.api.DefaultItem.builder(boxNow).containerId(bin.getId()).build())),
         "update-path cycle refused");
 
     assertTrue(this.audit.getEvents().stream().map(e -> e.getAction())
@@ -170,10 +171,8 @@ public class InMemoryInventorySystemTest {
     assertFalse(await(this.system.addIdentity("missing", nfc)));
     assertTrue(await(this.system.findByIdentity("qr", "nope")).isEmpty());
 
-    assertTrue(this.audit.getEvents().stream().map(e -> e.getAction())
-        .anyMatch("item.identity-add"::equals));
-    assertTrue(this.audit.getEvents().stream().map(e -> e.getAction())
-        .anyMatch("item.identity-remove"::equals));
+    assertTrue(this.audit.getEvents().stream().map(e -> e.getAction()).anyMatch("item.identity-add"::equals));
+    assertTrue(this.audit.getEvents().stream().map(e -> e.getAction()).anyMatch("item.identity-remove"::equals));
   }
 
   @Test

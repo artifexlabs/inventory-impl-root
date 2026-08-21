@@ -18,9 +18,8 @@
 package io.artifexlabs.inventory.impl.bus;
 
 /**
- * A refused or failed bus action. The code is HTTP-aligned (400, 401, 403,
- * 404, 409, 503) and becomes the Vert.x reply failure code, so the HTTP
- * gateway translates one-to-one without a mapping table.
+ * A refused or failed bus action. The code is HTTP-aligned (400, 401, 403, 404, 409, 503) and becomes the Vert.x reply
+ * failure code, so the HTTP gateway translates one-to-one without a mapping table.
  */
 public class BusServiceException extends RuntimeException {
   private static final long serialVersionUID = 1L;

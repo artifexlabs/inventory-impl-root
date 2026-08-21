@@ -33,11 +33,10 @@ import io.artifexlabs.inventory.api.bus.Roles;
 import io.vertx.core.json.JsonObject;
 
 /**
- * The envelope's immutability contract: once constructed, nothing an outside
- * holder does — to the object it built from, to what the accessors return, or
- * to the wire form — changes what the envelope says. Combined with the
- * fabric's trust model (cluster membership is the only entry point), an
- * admitted envelope's identity and payload are fixed for its lifetime.
+ * The envelope's immutability contract: once constructed, nothing an outside holder does — to the object it built from,
+ * to what the accessors return, or to the wire form — changes what the envelope says. Combined with the fabric's trust
+ * model (cluster membership is the only entry point), an admitted envelope's identity and payload are fixed for its
+ * lifetime.
  */
 public class DefaultBusEnvelopeTest {
 

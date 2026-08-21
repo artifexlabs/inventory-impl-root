@@ -43,11 +43,9 @@ import io.vertx.mutiny.sqlclient.SqlClient;
 import io.vertx.mutiny.sqlclient.Tuple;
 
 /**
- * Postgres {@link RegionSystem}. Promotion (item + containment + region link +
- * every audit row) is ONE transaction, so a half-created item or an unlinked
- * audit trail cannot exist. Audit rows mirror what the in-memory path emits
- * through {@code InventorySystem}: item.create, item.contain (when contained),
- * then item.create-from-region.
+ * Postgres {@link RegionSystem}. Promotion (item + containment + region link + every audit row) is ONE transaction, so
+ * a half-created item or an unlinked audit trail cannot exist. Audit rows mirror what the in-memory path emits through
+ * {@code InventorySystem}: item.create, item.contain (when contained), then item.create-from-region.
  *
  * @author mykel
  *
@@ -62,8 +60,7 @@ public class PgRegionSystem implements RegionSystem {
 
   private final Pool pool;
   private final String principal;
-  private io.artifexlabs.inventory.api.events.EventPublisher events =
-      io.artifexlabs.inventory.api.events.EventPublisher.NOOP;
+  private io.artifexlabs.inventory.api.events.EventPublisher events = io.artifexlabs.inventory.api.events.EventPublisher.NOOP;
 
   public PgRegionSystem(Pool pool, String principal) {
     this.pool = requireNonNull(pool, "pool");
@@ -88,16 +85,13 @@ public class PgRegionSystem implements RegionSystem {
     io.artifexlabs.inventory.api.AuditEvent e = new io.artifexlabs.inventory.api.DefaultAuditEvent(Ulid.next(),
         Instant.now(), this.principal, action, targetId, details);
     pending.add(e);
-    return conn.preparedQuery(INSERT_AUDIT)
-        .execute(Tuple.of(e.getId(), odt(e.getTimestamp()), e.getPrincipal(), e.getAction(), e.getTargetId(),
-            e.getDetails().orElse(null)))
-        .replaceWithVoid();
+    return conn.preparedQuery(INSERT_AUDIT).execute(Tuple.of(e.getId(), odt(e.getTimestamp()), e.getPrincipal(),
+        e.getAction(), e.getTargetId(), e.getDetails().orElse(null))).replaceWithVoid();
   }
 
   @Override
   public CompletionStage<List<AssetRegion>> listRegions(String assetId) {
-    return this.pool
-        .preparedQuery("SELECT " + SELECT_REGION_COLS + " FROM asset_regions WHERE asset_id=$1 ORDER BY id")
+    return this.pool.preparedQuery("SELECT " + SELECT_REGION_COLS + " FROM asset_regions WHERE asset_id=$1 ORDER BY id")
         .execute(Tuple.of(assetId)).map(rs -> {
           List<AssetRegion> out = new ArrayList<>();
           for (Row r : rs)
@@ -107,13 +101,12 @@ public class PgRegionSystem implements RegionSystem {
   }
 
   @Override
-  public CompletionStage<Optional<AssetRegion>> createRegion(String assetId, double x, double y, double w,
-      double h, String label) {
+  public CompletionStage<Optional<AssetRegion>> createRegion(String assetId, double x, double y, double w, double h,
+      String label) {
     AssetRegion region = new AssetRegion(Ulid.next(), assetId, x, y, w, h, null, label, Instant.now());
     List<io.artifexlabs.inventory.api.AuditEvent> pending = new ArrayList<>();
     return this.events.announceAll(this.pool.withTransaction(conn -> assetOwner(conn, assetId)
-        .flatMap(owner -> owner.isEmpty()
-            ? Uni.createFrom().item(Optional.<AssetRegion>empty())
+        .flatMap(owner -> owner.isEmpty() ? Uni.createFrom().item(Optional.<AssetRegion>empty())
             : insertRegion(conn, region)
                 .flatMap(v -> audit(conn, pending, "region.create", owner.get(),
                     new JsonObject().put("assetId", assetId).put("regionId", region.id())))
@@ -124,29 +117,34 @@ public class PgRegionSystem implements RegionSystem {
   @Override
   public CompletionStage<Boolean> deleteRegion(String regionId) {
     List<io.artifexlabs.inventory.api.AuditEvent> pending = new ArrayList<>();
-    return this.events.announceAll(this.pool.withTransaction(conn -> conn
-        .preparedQuery("DELETE FROM asset_regions WHERE id=$1 RETURNING asset_id").execute(Tuple.of(regionId))
-        .flatMap(rs -> {
-          for (Row r : rs) {
-            String assetId = r.getString("asset_id");
-            return assetOwner(conn, assetId).flatMap(owner -> audit(conn, pending, "region.delete",
-                owner.orElse(assetId), new JsonObject().put("assetId", assetId).put("regionId", regionId)))
-                .map(v -> true);
-          }
-          return Uni.createFrom().item(false);
-        })).subscribeAsCompletionStage(), pending);
+    return this.events.announceAll(
+        this.pool.withTransaction(conn -> conn.preparedQuery("DELETE FROM asset_regions WHERE id=$1 RETURNING asset_id")
+            .execute(Tuple.of(regionId)).flatMap(rs -> {
+              for (Row r : rs) {
+                String assetId = r.getString("asset_id");
+                return assetOwner(conn, assetId).flatMap(owner -> audit(conn, pending, "region.delete",
+                    owner.orElse(assetId), new JsonObject().put("assetId", assetId).put("regionId", regionId)))
+                    .map(v -> true);
+              }
+              return Uni.createFrom().item(false);
+            })).subscribeAsCompletionStage(),
+        pending);
   }
 
   @Override
-  public CompletionStage<Optional<Item>> createItemFromRegion(String assetId, double x, double y, double w,
-      double h, String name, String type, String containerId) {
+  public CompletionStage<Optional<Item>> createItemFromRegion(String assetId, double x, double y, double w, double h,
+      String name, String type, String containerId) {
     AssetRegion region = new AssetRegion(Ulid.next(), assetId, x, y, w, h, null, name, Instant.now());
     List<io.artifexlabs.inventory.api.AuditEvent> pending = new ArrayList<>();
-    return this.events.announceAll(this.pool.withTransaction(conn -> assetOwner(conn, assetId)
-        .flatMap(owner -> owner.isEmpty()
-            ? Uni.createFrom().item(Optional.<Item>empty())
-            : insertRegion(conn, region).flatMap(v -> promote(conn, pending, region, name, type, containerId))))
-        .subscribeAsCompletionStage(), pending);
+    return this.events
+        .announceAll(
+            this.pool
+                .withTransaction(conn -> assetOwner(conn, assetId)
+                    .flatMap(owner -> owner.isEmpty() ? Uni.createFrom().item(Optional.<Item>empty())
+                        : insertRegion(conn, region)
+                            .flatMap(v -> promote(conn, pending, region, name, type, containerId))))
+                .subscribeAsCompletionStage(),
+            pending);
   }
 
   @Override
@@ -169,31 +167,29 @@ public class PgRegionSystem implements RegionSystem {
     Uni<Boolean> containerOk = containerId == null ? Uni.createFrom().item(true)
         : conn.preparedQuery("SELECT 1 FROM items WHERE id=$1").execute(Tuple.of(containerId))
             .map(rs -> rs.iterator().hasNext());
-    return containerOk.flatMap(ok -> !ok ? Uni.createFrom().item(Optional.<Item>empty())
-        : conn.preparedQuery("INSERT INTO items (id, name, display_name, type, ts) VALUES ($1, $2, $3, $4, $5)")
-            .execute(Tuple.of(item.getId(), item.getName(), null, item.getType(), odt(item.getTimestamp())))
-            .flatMap(v -> audit(conn, pending, "item.create", item.getId(), ItemFactory.serialize(item)))
-            .flatMap(v -> containerId == null ? Uni.createFrom().voidItem()
-                : conn.preparedQuery("UPDATE items SET container_id=$1 WHERE id=$2")
-                    .execute(Tuple.of(containerId, item.getId()))
-                    .flatMap(x -> audit(conn, pending, "item.contain", item.getId(),
-                        new JsonObject().put("containerId", containerId))))
-            .flatMap(v -> conn
-                .preparedQuery("UPDATE asset_regions SET item_id=$2, label=$3 WHERE id=$1")
-                .execute(Tuple.of(region.id(), item.getId(), name)))
-            .flatMap(v -> audit(conn, pending, "item.create-from-region", item.getId(),
-                new JsonObject().put("assetId", region.assetId()).put("regionId", region.id())
-                    .put("containerId", containerId)))
-            .map(v -> Optional.of(item)));
+    return containerOk
+        .flatMap(ok -> !ok ? Uni.createFrom().item(Optional.<Item>empty())
+            : conn.preparedQuery("INSERT INTO items (id, name, display_name, type, ts) VALUES ($1, $2, $3, $4, $5)")
+                .execute(Tuple.of(item.getId(), item.getName(), null, item.getType(), odt(item.getTimestamp())))
+                .flatMap(v -> audit(conn, pending, "item.create", item.getId(), ItemFactory.serialize(item)))
+                .flatMap(v -> containerId == null ? Uni.createFrom().voidItem()
+                    : conn.preparedQuery("UPDATE items SET container_id=$1 WHERE id=$2")
+                        .execute(Tuple.of(containerId, item.getId()))
+                        .flatMap(x -> audit(conn, pending, "item.contain", item.getId(),
+                            new JsonObject().put("containerId", containerId))))
+                .flatMap(v -> conn.preparedQuery("UPDATE asset_regions SET item_id=$2, label=$3 WHERE id=$1")
+                    .execute(Tuple.of(region.id(), item.getId(), name)))
+                .flatMap(v -> audit(conn, pending, "item.create-from-region", item.getId(), new JsonObject()
+                    .put("assetId", region.assetId()).put("regionId", region.id()).put("containerId", containerId)))
+                .map(v -> Optional.of(item)));
   }
 
   private static Uni<Void> insertRegion(SqlClient conn, AssetRegion r) {
     return conn.preparedQuery("""
         INSERT INTO asset_regions (id, asset_id, x, y, w, h, item_id, label, ts)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)""")
-        .execute(Tuple.from(new Object[] { r.id(), r.assetId(), r.x(), r.y(), r.w(), r.h(), r.itemId(),
-            r.label(), odt(r.timestamp()) }))
-        .replaceWithVoid();
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)""").execute(Tuple.from(new Object[] {
+        r.id(), r.assetId(), r.x(), r.y(), r.w(), r.h(), r.itemId(), r.label(), odt(r.timestamp())
+    })).replaceWithVoid();
   }
 
   /** The item owning an asset — the audit target for region activity. */

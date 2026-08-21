@@ -31,7 +31,9 @@ public class Tcp9100TransportTest {
 
   @Test
   public void deliversBytesVerbatim() throws Exception {
-    byte[] payload = new byte[] { 0x1B, 0x40, 0x47, 0x10, 0x00, (byte) 0xFF, 0x1A };
+    byte[] payload = new byte[] {
+        0x1B, 0x40, 0x47, 0x10, 0x00, (byte) 0xFF, 0x1A
+    };
     try (ServerSocket fake = new ServerSocket(0)) {
       CompletableFuture<byte[]> received = CompletableFuture.supplyAsync(() -> {
         try (var socket = fake.accept()) {
@@ -47,7 +49,8 @@ public class Tcp9100TransportTest {
 
   @Test
   public void unreachablePrinterThrows() {
-    assertThrows(IOException.class,
-        () -> new Tcp9100Transport("localhost", 1, 250).send(new byte[] { 1 }));
+    assertThrows(IOException.class, () -> new Tcp9100Transport("localhost", 1, 250).send(new byte[] {
+        1
+    }));
   }
 }

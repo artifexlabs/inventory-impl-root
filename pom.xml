@@ -18,17 +18,20 @@
     @formatter:on
 
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
+
   <parent>
     <groupId>io.artifexlabs.inventory</groupId>
     <artifactId>inventory-parent</artifactId>
     <version>1</version>
     <relativePath/>
   </parent>
+
   <artifactId>inventory-impl-root</artifactId>
   <version>0.1.0-SNAPSHOT</version>
   <packaging>pom</packaging>
+
   <name>${project.artifactId}</name>
   <description>Aggregator releasing the inventory impl modules as ONE version:
     core (domain impls, memory twins, bus verticles, label/QR/catalog
@@ -36,23 +39,17 @@
     memory/Pg parity tests run in a single reactor pass here — artifact
     separation without version separation (MAVEN_RELEASES.md).</description>
   <url>${github.url.base}/${project.artifactId}</url>
-  <properties>
-    <!-- The one cross-repo dependency of this train. inventory-parent no
-         longer manages inventory-family versions (Central rejects SNAPSHOT
-         dependencyManagement in released poms), so the train pins its own
-         api. PER-RELEASE: bump this to api's RELEASED version before
-         release:prepare — api releases ahead of this aggregator. -->
-    <inventory.api.version>0.1.0-SNAPSHOT</inventory.api.version>
-  </properties>
-  <dependencyManagement>
-    <dependencies>
-      <dependency>
-        <groupId>io.artifexlabs.inventory</groupId>
-        <artifactId>inventory-api</artifactId>
-        <version>${inventory.api.version}</version>
-      </dependency>
-    </dependencies>
-  </dependencyManagement>
+
+  <modules>
+    <module>inventory-impl-printer-common</module>
+    <module>inventory-impl</module>
+    <module>inventory-impl-changeset</module>
+    <module>inventory-impl-bus</module>
+    <module>inventory-impl-brother</module>
+    <module>inventory-impl-zebra</module>
+    <module>inventory-impl-pg</module>
+  </modules>
+
   <scm>
     <connection>scm:git:${git.url}</connection>
     <url>scm:git:${git.url}</url>
@@ -65,13 +62,23 @@
       <url>${site.target.url}/</url>
     </site>
   </distributionManagement>
-  <modules>
-    <module>inventory-impl-printer-common</module>
-    <module>inventory-impl</module>
-    <module>inventory-impl-changeset</module>
-    <module>inventory-impl-bus</module>
-    <module>inventory-impl-brother</module>
-    <module>inventory-impl-zebra</module>
-    <module>inventory-impl-pg</module>
-  </modules>
+
+  <properties>
+    <!-- The one cross-repo dependency of this train. inventory-parent no
+         longer manages inventory-family versions (Central rejects SNAPSHOT
+         dependencyManagement in released poms), so the train pins its own
+         api. PER-RELEASE: bump this to api's RELEASED version before
+         release:prepare — api releases ahead of this aggregator. -->
+    <inventory.api.version>0.1.0</inventory.api.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>io.artifexlabs.inventory</groupId>
+        <artifactId>inventory-api</artifactId>
+        <version>${inventory.api.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 </project>

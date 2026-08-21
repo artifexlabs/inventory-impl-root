@@ -24,18 +24,14 @@ import io.vertx.core.json.JsonArray;
 
 /** Spatial annotation over the bus: boxes on pictures and their promotion. */
 /**
- * The public regions service: admission control and routing only. Every
- * operation is performed by the storage layer behind {@code storage} —
- * this verticle holds no backend reference at all (PLAN.md Phase 21, ask 2).
+ * The public regions service: admission control and routing only. Every operation is performed by the storage layer
+ * behind {@code storage} — this verticle holds no backend reference at all (PLAN.md Phase 21, ask 2).
  */
 public class RegionsVerticle extends ServiceVerticle {
 
   public RegionsVerticle(BusGuard guard) {
     super(BusActions.addressOf(BusActions.REGIONS_LIST), guard);
-    forward(BusActions.REGIONS_LIST,
-        BusActions.REGIONS_CREATE,
-        BusActions.REGIONS_DELETE,
-        BusActions.REGIONS_CREATE_ITEM,
-        BusActions.REGIONS_MAKE_ITEM);
+    forward(BusActions.REGIONS_LIST, BusActions.REGIONS_CREATE, BusActions.REGIONS_DELETE,
+        BusActions.REGIONS_CREATE_ITEM, BusActions.REGIONS_MAKE_ITEM);
   }
 }

@@ -29,11 +29,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Downloads a catalog entry's product image ONCE, at item creation, so the
- * asset survives the external site changing (never hot-linked). Only URLs
- * that came out of our own catalog adapters are ever fetched — client-supplied
- * URLs are never downloaded (SSRF). Failures degrade to "no image": an item
- * without a picture beats no item.
+ * Downloads a catalog entry's product image ONCE, at item creation, so the asset survives the external site changing
+ * (never hot-linked). Only URLs that came out of our own catalog adapters are ever fetched — client-supplied URLs are
+ * never downloaded (SSRF). Failures degrade to "no image": an item without a picture beats no item.
  */
 public final class CatalogImages {
   private final static Logger log = LoggerFactory.getLogger(CatalogImages.class);
@@ -57,17 +55,14 @@ public final class CatalogImages {
     } catch (RuntimeException e) {
       return java.util.concurrent.CompletableFuture.completedStage(Optional.empty());
     }
-    return HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray())
-        .<Optional<Image>>thenApply(response -> {
-          if (response.statusCode() != 200 || response.body().length == 0
-              || response.body().length > MAX_BYTES)
-            return Optional.empty();
-          String contentType = response.headers().firstValue("Content-Type").orElse("image/jpeg");
-          return Optional.of(new Image(contentType, response.body()));
-        })
-        .exceptionally(e -> {
-          log.debug("Catalog image fetch failed for {}: {}", url, e.toString());
-          return Optional.empty();
-        });
+    return HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofByteArray()).<Optional<Image>>thenApply(response -> {
+      if (response.statusCode() != 200 || response.body().length == 0 || response.body().length > MAX_BYTES)
+        return Optional.empty();
+      String contentType = response.headers().firstValue("Content-Type").orElse("image/jpeg");
+      return Optional.of(new Image(contentType, response.body()));
+    }).exceptionally(e -> {
+      log.debug("Catalog image fetch failed for {}: {}", url, e.toString());
+      return Optional.empty();
+    });
   }
 }

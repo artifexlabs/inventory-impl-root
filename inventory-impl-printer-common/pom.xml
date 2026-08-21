@@ -18,22 +18,25 @@
     @formatter:on
 
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
+
   <parent>
     <groupId>io.artifexlabs.inventory</groupId>
     <artifactId>inventory-impl-root</artifactId>
     <version>0.1.0-SNAPSHOT</version>
   </parent>
+
   <artifactId>inventory-impl-printer-common</artifactId>
+
   <name>${project.artifactId}</name>
   <description>Printer plumbing every vendor shares: LabelComposer (all label
     layouts as pure image-composition functions) and Tcp9100Transport (the
     JetDirect/port-9100 wire both the Brother and networked Zebras speak).
     Deliberately dependency-free — pure JDK.</description>
+
   <dependencies>
-    <dependency>
-      <!-- printing is reached over the event bus (MORE_VERTX step 4) -->
+    <dependency><!-- printing is reached over the event bus (MORE_VERTX step 4) -->
       <groupId>io.artifexlabs.inventory</groupId>
       <artifactId>inventory-api</artifactId>
     </dependency>
@@ -41,8 +44,7 @@
       <groupId>io.vertx</groupId>
       <artifactId>vertx-core</artifactId>
     </dependency>
-    <dependency>
-      <!-- QrCodes renders the module-exact matrices label layouts consume -->
+    <dependency><!-- QrCodes renders the module-exact matrices label layouts consume -->
       <groupId>com.google.zxing</groupId>
       <artifactId>core</artifactId>
     </dependency>

@@ -18,19 +18,23 @@
     @formatter:on
 
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
+
   <parent>
     <groupId>io.artifexlabs.inventory</groupId>
     <artifactId>inventory-impl-root</artifactId>
     <version>0.1.0-SNAPSHOT</version>
   </parent>
+
   <artifactId>inventory-impl</artifactId>
+
   <name>${project.artifactId}</name>
   <description>Default implementations for the inventory API: domain impls,
     in-memory twins, bus verticles, label/QR/catalog machinery. Postgres
     backends and changelogs live in inventory-impl-pg.</description>
   <url>${github.url.base}/${project.artifactId}</url>
+
   <scm>
     <connection>scm:git:${git.url}</connection>
     <url>scm:git:${git.url}</url>
@@ -43,18 +47,17 @@
       <url>${site.target.url}/</url>
     </site>
   </distributionManagement>
+
   <dependencies>
     <dependency>
       <groupId>io.artifexlabs.inventory</groupId>
       <artifactId>inventory-api</artifactId>
     </dependency>
-    <dependency>
-      <!-- bus workers (impl.bus): verticles + envelope wire types -->
+    <dependency><!-- bus workers (impl.bus): verticles + envelope wire types -->
       <groupId>io.vertx</groupId>
       <artifactId>vertx-core</artifactId>
     </dependency>
-    <dependency>
-      <!-- QR rendering happens beside the label printer, in the labels worker -->
+    <dependency><!-- QR rendering happens beside the label printer, in the labels worker -->
       <groupId>com.google.zxing</groupId>
       <artifactId>core</artifactId>
     </dependency>

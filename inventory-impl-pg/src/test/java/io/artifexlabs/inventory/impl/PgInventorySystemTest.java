@@ -53,9 +53,8 @@ import liquibase.database.jvm.JdbcConnection;
 import liquibase.resource.ClassLoaderResourceAccessor;
 
 /**
- * Full round trip against a real Postgres: Liquibase brings up the schema from
- * empty, then CRUD + audit + containment are exercised through the reactive
- * client. Skipped automatically when Docker is unavailable.
+ * Full round trip against a real Postgres: Liquibase brings up the schema from empty, then CRUD + audit + containment
+ * are exercised through the reactive client. Skipped automatically when Docker is unavailable.
  */
 @Testcontainers(disabledWithoutDocker = true)
 public class PgInventorySystemTest {
@@ -94,8 +93,8 @@ public class PgInventorySystemTest {
     Item wrench = await(system.createItem("wrench", null, "tool"));
     assertEquals("toolbox", await(system.getItem(box.getId())).get().getName());
 
-    Item updated = DefaultItem.builder(box).description("red metal box").quantity(1L)
-        .weight(Weight.ofKilograms(3.2)).dimensions(new Dimensions(50.0, 25.0, 20.0)).build();
+    Item updated = DefaultItem.builder(box).description("red metal box").quantity(1L).weight(Weight.ofKilograms(3.2))
+        .dimensions(new Dimensions(50.0, 25.0, 20.0)).build();
     assertTrue(await(system.updateItem(updated)));
     // contents are DERIVED since Phase 15: containment changes go through
     // addToContainer (and its cycle check), never through an item update
@@ -110,8 +109,8 @@ public class PgInventorySystemTest {
     assertEquals(Set.of(wrench), read.getContainedItems().get());
 
     Item disk = await(system.createItem("backup-disk", null, "data"));
-    assertTrue(await(
-        system.updateItem(DefaultItem.builder(disk).dataInfo(new DataInfo(MediaKind.PHYSICAL_MEDIA, true, false)).build())));
+    assertTrue(await(system
+        .updateItem(DefaultItem.builder(disk).dataInfo(new DataInfo(MediaKind.PHYSICAL_MEDIA, true, false)).build())));
     assertEquals(new DataInfo(MediaKind.PHYSICAL_MEDIA, true, false),
         await(system.getItem(disk.getId())).get().getDataInfo().get());
 
@@ -178,8 +177,7 @@ public class PgInventorySystemTest {
         "update-path cycle refused");
 
     // coordinate inheritance across the chain
-    Item pinnedBox = io.artifexlabs.inventory.api.DefaultItem
-        .builder(await(system.getItem(box.getId())).get())
+    Item pinnedBox = io.artifexlabs.inventory.api.DefaultItem.builder(await(system.getItem(box.getId())).get())
         .coordinates(new io.artifexlabs.inventory.api.LatLong(33.7, -84.4)).build();
     assertTrue(await(system.updateItem(pinnedBox)));
     assertTrue(await(system.addToContainer(bin.getId(), bolt.getId())));
@@ -191,8 +189,10 @@ public class PgInventorySystemTest {
     assertTrue(await(system.tag(bolt.getId(), io.artifexlabs.inventory.api.ItemTag.of("scuba"))));
     assertEquals(2, await(system.getItem(bolt.getId())).get().getTags().size());
     assertEquals(1, await(system.findByTag(io.artifexlabs.inventory.api.TagQuery.key("scuba"))).size());
-    assertEquals(1, await(system.findByTag(new io.artifexlabs.inventory.api.TagQuery("col*", "ora*",
-        io.artifexlabs.inventory.api.TagQuery.Mode.GLOB))).size());
+    assertEquals(1,
+        await(system.findByTag(
+            new io.artifexlabs.inventory.api.TagQuery("col*", "ora*", io.artifexlabs.inventory.api.TagQuery.Mode.GLOB)))
+            .size());
     assertTrue(await(system.untag(bolt.getId(), "scuba")));
     assertFalse(await(system.untag(bolt.getId(), "scuba")));
   }
@@ -200,8 +200,8 @@ public class PgInventorySystemTest {
   @Test
   public void testPgAuditAndAdminOperations() throws Exception {
     PgAudit audit = new PgAudit(pool);
-    io.artifexlabs.inventory.api.AuditEvent event = new io.artifexlabs.inventory.api.DefaultAuditEvent(
-        Ulid.next(), java.time.Instant.now(), "pg-admin-test", "user.create", "target-x",
+    io.artifexlabs.inventory.api.AuditEvent event = new io.artifexlabs.inventory.api.DefaultAuditEvent(Ulid.next(),
+        java.time.Instant.now(), "pg-admin-test", "user.create", "target-x",
         new io.vertx.core.json.JsonObject().put("email", "x@example.com"));
     await(audit.record(event));
 
@@ -240,8 +240,8 @@ public class PgInventorySystemTest {
 
     // a place is a container with coordinates; deleting it orphans contents
     Item garage = await(system.createItem("PG Garage", null, "location"));
-    assertTrue(await(system.updateItem(DefaultItem.builder(garage)
-        .coordinates(new io.artifexlabs.inventory.api.LatLong(33.7, -84.4)).build())));
+    assertTrue(await(system.updateItem(
+        DefaultItem.builder(garage).coordinates(new io.artifexlabs.inventory.api.LatLong(33.7, -84.4)).build())));
     assertTrue(await(system.addToContainer(garage.getId(), screws.getId())));
     assertEquals(java.util.Optional.of(new io.artifexlabs.inventory.api.LatLong(33.7, -84.4)),
         await(system.effectiveCoordinates(screws.getId())));
@@ -250,39 +250,44 @@ public class PgInventorySystemTest {
 
     // assets: bytes round-trip; item deletion cascades them away
     PgAssetStore assets = new PgAssetStore(pool, "pg-test");
-    byte[] photo = new byte[] { 10, 20, 30 };
-    io.artifexlabs.inventory.api.AssetInfo info = await(
-        assets.store(screws.getId(), "pic.png", "image/png", photo)).get();
+    byte[] photo = new byte[] {
+        10, 20, 30
+    };
+    io.artifexlabs.inventory.api.AssetInfo info = await(assets.store(screws.getId(), "pic.png", "image/png", photo))
+        .get();
     org.junit.jupiter.api.Assertions.assertArrayEquals(photo, await(assets.get(info.id())).get().data());
     assertEquals(1, await(assets.listFor(screws.getId())).size());
     assertTrue(await(assets.store("missing-item", "f", "t", photo)).isEmpty());
     assertEquals("photo", info.kind(), "kind defaults to photo");
-    assertEquals("map", await(assets.store(screws.getId(), "plan.png", "image/png", photo, null, "map")).get()
-        .kind(), "explicit kind round-trips");
+    assertEquals("map", await(assets.store(screws.getId(), "plan.png", "image/png", photo, null, "map")).get().kind(),
+        "explicit kind round-trips");
 
     // a picture that IS a place: item + asset + audits in ONE transaction,
     // EXIF pinning the created item itself (33°44'56"N 84°23'24"W)
     byte[] gpsJpeg = GpsJpeg.withGps(33, 44, 56, "N", 84, 23, 24, "W");
-    var made = await(assets.createItemFromPhoto("PG Photo Garage", null, "location", null, "garage.jpg",
-        "image/jpeg", gpsJpeg, null, null)).get();
+    var made = await(assets.createItemFromPhoto("PG Photo Garage", null, "location", null, "garage.jpg", "image/jpeg",
+        gpsJpeg, null, null)).get();
     Item place = await(system.getItem(made.item().getId())).get();
     assertEquals("location", place.getType());
     assertTrue(place.getCoordinates().isPresent(), "EXIF pinned the place");
     assertEquals(made.item().getId(), made.asset().itemId());
     assertEquals(1, await(assets.listFor(place.getId())).size());
-    var contained = await(assets.createItemFromPhoto("PG Wall Map", null, "location", place.getId(),
-        "plan.png", "image/png", photo, null, "map")).get();
+    var contained = await(assets.createItemFromPhoto("PG Wall Map", null, "location", place.getId(), "plan.png",
+        "image/png", photo, null, "map")).get();
     assertEquals(java.util.Optional.of(place.getId()),
         await(system.getItem(contained.item().getId())).get().getContainerId());
     assertEquals("map", contained.asset().kind());
-    assertTrue(await(assets.createItemFromPhoto("x", null, "location", "missing-container", "f.png",
-        "image/png", photo, null, null)).isEmpty(), "unknown container refuses the whole transaction");
+    assertTrue(await(
+        assets.createItemFromPhoto("x", null, "location", "missing-container", "f.png", "image/png", photo, null, null))
+        .isEmpty(), "unknown container refuses the whole transaction");
 
     // replace archives the superseded bytes into asset_archive, same tx;
     // the audit event references the archive row and carries no blob
-    byte[] photo2 = new byte[] { 40, 50, 60, 70 };
-    io.artifexlabs.inventory.api.AssetInfo rev = await(
-        assets.replace(info.id(), "pic2.png", "image/png", photo2, null)).get();
+    byte[] photo2 = new byte[] {
+        40, 50, 60, 70
+    };
+    io.artifexlabs.inventory.api.AssetInfo rev = await(assets.replace(info.id(), "pic2.png", "image/png", photo2, null))
+        .get();
     org.junit.jupiter.api.Assertions.assertArrayEquals(photo2, await(assets.get(info.id())).get().data());
     // compare at the database's precision: Instant.now() is nanos on Linux
     // but timestamptz stores micros, and rev round-tripped through Postgres
@@ -290,9 +295,8 @@ public class PgInventorySystemTest {
         rev.attachedAt().truncatedTo(java.time.temporal.ChronoUnit.MICROS));
     try (Connection c = DriverManager.getConnection(PG.getJdbcUrl(), PG.getUsername(), PG.getPassword());
         Statement st = c.createStatement()) {
-      try (ResultSet rs = st.executeQuery(
-          "SELECT a.data, a.audit_event_id, e.details FROM asset_archive a "
-              + "JOIN audit_events e ON e.id = a.audit_event_id WHERE a.asset_id = '" + info.id() + "'")) {
+      try (ResultSet rs = st.executeQuery("SELECT a.data, a.audit_event_id, e.details FROM asset_archive a "
+          + "JOIN audit_events e ON e.id = a.audit_event_id WHERE a.asset_id = '" + info.id() + "'")) {
         assertTrue(rs.next(), "archive row exists and joins to its audit event");
         org.junit.jupiter.api.Assertions.assertArrayEquals(photo, rs.getBytes(1),
             "original bytes recoverable from the archive");
@@ -331,12 +335,10 @@ public class PgInventorySystemTest {
 
     // concurrent writers: commit order and ULID order may disagree; seq must
     // still page every event exactly once, oldest first
-    java.util.List<java.util.concurrent.CompletableFuture<io.artifexlabs.inventory.api.Item>> creates =
-        new java.util.ArrayList<>();
+    java.util.List<java.util.concurrent.CompletableFuture<io.artifexlabs.inventory.api.Item>> creates = new java.util.ArrayList<>();
     for (int i = 0; i < 25; i++)
       creates.add(system.createItem("seq-item-" + i, null, "seq-test").toCompletableFuture());
-    java.util.concurrent.CompletableFuture.allOf(creates.toArray(java.util.concurrent.CompletableFuture[]::new))
-        .get();
+    java.util.concurrent.CompletableFuture.allOf(creates.toArray(java.util.concurrent.CompletableFuture[]::new)).get();
 
     java.util.Set<String> expectedIds = new java.util.HashSet<>();
     for (var f : creates)
@@ -380,11 +382,12 @@ public class PgInventorySystemTest {
   public void testPgCreateItemFromUpc() throws Exception {
     PgAssetStore assets = new PgAssetStore(pool, "pg-test");
     String gtin = "0012345678905";
-    var spec = new io.artifexlabs.inventory.api.UpcItemCreation(gtin, "PG Scanned Drill", "DeWalt Drill",
-        "tool", "Cordless drill", 1633.0, null,
-        java.util.List.of(new io.artifexlabs.inventory.api.ItemTag("brand", "DeWalt"),
+    var spec = new io.artifexlabs.inventory.api.UpcItemCreation(gtin, "PG Scanned Drill", "DeWalt Drill", "tool",
+        "Cordless drill", 1633.0, null, java.util.List.of(new io.artifexlabs.inventory.api.ItemTag("brand", "DeWalt"),
             new io.artifexlabs.inventory.api.ItemTag("source", "https://example.test/upc/" + gtin)));
-    byte[] image = new byte[] { 9, 8, 7 };
+    byte[] image = new byte[] {
+        9, 8, 7
+    };
     var made = await(assets.createItemFromUpc(spec, "upc.jpg", "image/jpeg", image)).get();
 
     Item item = await(system.getItem(made.item().getId())).get();
@@ -403,8 +406,8 @@ public class PgInventorySystemTest {
     assertEquals(before, await(system.getAllItems()).size(), "the refused transaction rolled back the item");
 
     // container check still gates the whole creation
-    var placed = new io.artifexlabs.inventory.api.UpcItemCreation("0000096385074", "PG Contained", null,
-        "thing", null, null, "missing-container", java.util.List.of());
+    var placed = new io.artifexlabs.inventory.api.UpcItemCreation("0000096385074", "PG Contained", null, "thing", null,
+        null, "missing-container", java.util.List.of());
     assertTrue(await(assets.createItemFromUpc(placed, null, null, null)).isEmpty());
   }
 
@@ -421,8 +424,7 @@ public class PgInventorySystemTest {
     assertTrue(await(system.addIdentity(wrench.getId(), upc)), "idempotent re-claim");
     assertEquals(wrench.getId(), await(system.findByIdentity("upc", "612345678906")).get().getId());
     assertEquals(wrench.getId(), await(system.findByIdentity("nfc-uid", "04:1A:2B")).get().getId());
-    assertEquals(
-        java.util.List.of(new io.artifexlabs.inventory.api.ItemIdentity("nfc-uid", "04:1A:2B"), upc),
+    assertEquals(java.util.List.of(new io.artifexlabs.inventory.api.ItemIdentity("nfc-uid", "04:1A:2B"), upc),
         await(system.identitiesOf(wrench.getId())));
 
     var refused = org.junit.jupiter.api.Assertions.assertThrows(ExecutionException.class,
@@ -447,8 +449,7 @@ public class PgInventorySystemTest {
   @Test
   public void testPgFederatedIdentities() throws Exception {
     PgUserStore users = new PgUserStore(pool);
-    io.artifexlabs.inventory.api.InventoryUser user = await(
-        users.ensureUser("pg-fed@example.com", "Fed", "pw", false));
+    io.artifexlabs.inventory.api.InventoryUser user = await(users.ensureUser("pg-fed@example.com", "Fed", "pw", false));
 
     assertEquals(user, await(users.findByEmail("PG-FED@EXAMPLE.COM")).get());
     assertTrue(await(users.findByEmail("pg-nobody@example.com")).isEmpty());

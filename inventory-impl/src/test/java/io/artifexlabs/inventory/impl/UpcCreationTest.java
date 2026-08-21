@@ -54,14 +54,16 @@ public class UpcCreationTest {
   }
 
   private static UpcItemCreation spec(String containerId) {
-    return new UpcItemCreation(GTIN, "Cola Can", "CocaCola Cola Can", "drink", "Carbonated soft drink",
-        355.0, containerId, List.of(new ItemTag("brand", "CocaCola"), new ItemTag("category", "drinks"),
+    return new UpcItemCreation(GTIN, "Cola Can", "CocaCola Cola Can", "drink", "Carbonated soft drink", 355.0,
+        containerId, List.of(new ItemTag("brand", "CocaCola"), new ItemTag("category", "drinks"),
             new ItemTag("source", "https://example.test/product/" + GTIN)));
   }
 
   @Test
   public void createsItemIdentityTagsAndImage() throws Exception {
-    byte[] image = new byte[] { 1, 2, 3, 4 };
+    byte[] image = new byte[] {
+        1, 2, 3, 4
+    };
     var made = await(this.assets.createItemFromUpc(spec(null), "upc.jpg", "image/jpeg", image)).get();
 
     Item item = await(this.system.getItem(made.item().getId())).get();
@@ -86,8 +88,7 @@ public class UpcCreationTest {
   public void imagelessAndContainedCreation() throws Exception {
     Item shelf = await(this.system.createItem("shelf", null, "container"));
     var made = await(this.assets.createItemFromUpc(spec(shelf.getId()), null, null, null)).get();
-    assertEquals(Optional.of(shelf.getId()),
-        await(this.system.getItem(made.item().getId())).get().getContainerId());
+    assertEquals(Optional.of(shelf.getId()), await(this.system.getItem(made.item().getId())).get().getContainerId());
     assertEquals(null, made.asset(), "no image, no asset — still a complete item");
     assertTrue(await(this.assets.createItemFromUpc(spec("missing-container"), null, null, null)).isEmpty(),
         "unknown container refuses");

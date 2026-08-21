@@ -21,19 +21,15 @@ import java.awt.image.BufferedImage;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Stage 2 of the label pipeline, ZPL dialect (the de-facto reference —
- * GK420t and Zebra-class printers): the whole 1-bit label bitmap becomes one
- * {@code ^GFA} graphic field, so the encoder stays format-agnostic exactly
- * like the Brother raster encoder — it rasterizes whatever bitmap arrives.
+ * Stage 2 of the label pipeline, ZPL dialect (the de-facto reference — GK420t and Zebra-class printers): the whole
+ * 1-bit label bitmap becomes one {@code ^GFA} graphic field, so the encoder stays format-agnostic exactly like the
+ * Brother raster encoder — it rasterizes whatever bitmap arrives.
  *
- * {@code ^LL} declares the format length (the bitmap height): without it the
- * firmware's length tracking has nothing to anchor to and re-syncs by
- * feeding blank labels after the job (observed on the GK420t 2026-08-14 —
- * three wasted labels). Gap sensing still trims at the physical gap.
- * Deliberately omitted: any persistent printer state ({@code ~SD} darkness,
- * {@code ^MT} media type) — calibration belongs to the printer, not every
- * job. Output is plain ASCII, eyeballable via the Labelary renderer during
- * development.
+ * {@code ^LL} declares the format length (the bitmap height): without it the firmware's length tracking has nothing to
+ * anchor to and re-syncs by feeding blank labels after the job (observed on the GK420t 2026-08-14 — three wasted
+ * labels). Gap sensing still trims at the physical gap. Deliberately omitted: any persistent printer state ({@code ~SD}
+ * darkness, {@code ^MT} media type) — calibration belongs to the printer, not every job. Output is plain ASCII,
+ * eyeballable via the Labelary renderer during development.
  */
 public class ZplEncoder {
 

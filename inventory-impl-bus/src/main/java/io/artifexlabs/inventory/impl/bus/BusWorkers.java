@@ -35,60 +35,52 @@ import io.vertx.core.ThreadingModel;
 import io.vertx.core.Vertx;
 
 /**
- * The full set of bus workers, deployed as one unit. inventory-server hosts
- * this in deployment; the HTTP gateway deploys the identical set in-process
- * for its embedded (single-process dev/test) mode, so the envelope contract
- * is exercised either way.
+ * The full set of bus workers, deployed as one unit. inventory-server hosts this in deployment; the HTTP gateway
+ * deploys the identical set in-process for its embedded (single-process dev/test) mode, so the envelope contract is
+ * exercised either way.
  */
 public final class BusWorkers {
 
   /** Everything the workers act through, bundled for deployment. */
-  public record BackendServices(InventorySystem inventory, AssetStore assets,
-      RegionSystem regions, AuditReader auditReader, AuditSink auditSink, LabelPrinter printer, UserStore users,
-      TokenService tokens, io.artifexlabs.inventory.api.UpcCatalog catalog) {
+  public record BackendServices(InventorySystem inventory, AssetStore assets, RegionSystem regions,
+      AuditReader auditReader, AuditSink auditSink, LabelPrinter printer, UserStore users, TokenService tokens,
+      io.artifexlabs.inventory.api.UpcCatalog catalog) {
   }
 
   private BusWorkers() {
   }
 
   /**
-   * Deploy every worker on the given Vert.x instance. {@code provision} is
-   * the OIDC exchange provisioning policy ({@code invited} or {@code auto}).
-   * The labels worker deploys on worker threads: QR/AWT composition is CPU
-   * work that must not block an event loop.
+   * Deploy every worker on the given Vert.x instance. {@code provision} is the OIDC exchange provisioning policy
+   * ({@code invited} or {@code auto}). The labels worker deploys on worker threads: QR/AWT composition is CPU work that
+   * must not block an event loop.
    */
   public static CompletionStage<Void> deploy(Vertx vertx, BackendServices s, BusGuard guard, String provision) {
     return deploy(vertx, s, guard, provision, new VertxStatusPublisher(vertx));
   }
 
   /**
-   * As {@link #deploy(Vertx, BackendServices, BusGuard, String)}, with an
-   * explicit status channel (the printer verticle reports outcomes there,
-   * since its replies are acceptance rather than completion).
+   * As {@link #deploy(Vertx, BackendServices, BusGuard, String)}, with an explicit status channel (the printer verticle
+   * reports outcomes there, since its replies are acceptance rather than completion).
    */
   public static CompletionStage<Void> deploy(Vertx vertx, BackendServices s, BusGuard guard, String provision,
       io.artifexlabs.inventory.api.events.StatusPublisher status) {
     DeploymentOptions workerThread = new DeploymentOptions().setThreadingModel(ThreadingModel.WORKER);
     Future<Void> all = Future.all(java.util.List.of(
         // the ONE door to storage; every public verticle forwards here
-        vertx.deployVerticle(new StorageVerticle(s, provision)),
-        vertx.deployVerticle(new ItemsVerticle(guard)),
-        vertx.deployVerticle(new AssetsVerticle(guard)),
-        vertx.deployVerticle(new RegionsVerticle(guard)),
-        vertx.deployVerticle(new AuditVerticle(guard)),
-        vertx.deployVerticle(new LabelsVerticle(guard), workerThread),
+        vertx.deployVerticle(new StorageVerticle(s, provision)), vertx.deployVerticle(new ItemsVerticle(guard)),
+        vertx.deployVerticle(new AssetsVerticle(guard)), vertx.deployVerticle(new RegionsVerticle(guard)),
+        vertx.deployVerticle(new AuditVerticle(guard)), vertx.deployVerticle(new LabelsVerticle(guard), workerThread),
         // the printer is reached over the bus now (PLAN.md Phase 21): it composes
         // and rasterizes, which is CPU work that must stay off the event loop
-        vertx.deployVerticle(new io.artifexlabs.inventory.impl.printer.common.LabelPrinterVerticle(
-            s.printer(), status, s.inventory()::getItem), workerThread),
+        vertx.deployVerticle(new io.artifexlabs.inventory.impl.printer.common.LabelPrinterVerticle(s.printer(), status,
+            s.inventory()::getItem), workerThread),
         // catalog lookups block on external HTTP: keep them off the event loop
         vertx.deployVerticle(new CatalogVerticle(guard, s.catalog()), workerThread),
-        vertx.deployVerticle(new UsersVerticle(guard)),
-        vertx.deployVerticle(new TokensVerticle(guard)),
+        vertx.deployVerticle(new UsersVerticle(guard)), vertx.deployVerticle(new TokensVerticle(guard)),
         vertx.deployVerticle(new AuthVerticle(guard)),
         // the status topic's baseline consumer: never write-only (PLAN.md Phase 21)
-        vertx.deployVerticle(new StatusLogVerticle())))
-        .mapEmpty();
+        vertx.deployVerticle(new StatusLogVerticle()))).mapEmpty();
     CompletableFuture<Void> done = new CompletableFuture<>();
     all.onComplete(r -> {
       if (r.succeeded())

@@ -26,8 +26,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Default {@link LabelPrinter}: no hardware, just a log line. Stands in until
- * a real vendor connector exists, and keeps the print flow exercisable.
+ * Default {@link LabelPrinter}: no hardware, just a log line. Stands in until a real vendor connector exists, and keeps
+ * the print flow exercisable.
  *
  * @author mykel
  *

@@ -27,14 +27,12 @@ import io.artifexlabs.inventory.api.bus.BusActions;
 import io.vertx.core.json.JsonObject;
 
 /**
- * Payload of {@link BusActions#ASSETS_CREATE_ITEM}: a picture that IS a
- * thing. Carries the item-to-be (name/displayName/type, optional containing
- * item) alongside the {@link AssetContent} to attach; bytes ride the envelope
- * base64.
+ * Payload of {@link BusActions#ASSETS_CREATE_ITEM}: a picture that IS a thing. Carries the item-to-be
+ * (name/displayName/type, optional containing item) alongside the {@link AssetContent} to attach; bytes ride the
+ * envelope base64.
  */
-public record DefaultPhotoItemRequest(String name, String displayName, String type, String containerId,
-    String filename, String contentType, byte[] bytes, Optional<LatLong> coordinates, String kind)
-    implements AssetContent {
+public record DefaultPhotoItemRequest(String name, String displayName, String type, String containerId, String filename,
+    String contentType, byte[] bytes, Optional<LatLong> coordinates, String kind) implements AssetContent {
 
   public DefaultPhotoItemRequest {
     if (name == null || name.isBlank())
@@ -47,8 +45,8 @@ public record DefaultPhotoItemRequest(String name, String displayName, String ty
 
   @Override
   public JsonObject toJson() {
-    JsonObject j = new JsonObject().put("name", this.name).put("type", this.type)
-        .put("filename", this.filename).put("contentType", this.contentType).put("bytes", this.bytes);
+    JsonObject j = new JsonObject().put("name", this.name).put("type", this.type).put("filename", this.filename)
+        .put("contentType", this.contentType).put("bytes", this.bytes);
     if (this.displayName != null)
       j.put("displayName", this.displayName);
     if (this.containerId != null)
@@ -64,7 +62,7 @@ public record DefaultPhotoItemRequest(String name, String displayName, String ty
         ? Optional.of(new LatLong(j.getDouble("latitude"), j.getDouble("longitude")))
         : Optional.empty();
     return new DefaultPhotoItemRequest(j.getString("name"), j.getString("displayName"), j.getString("type"),
-        j.getString("containerId"), j.getString("filename"), j.getString("contentType"), j.getBinary("bytes"),
-        coords, j.getString("kind"));
+        j.getString("containerId"), j.getString("filename"), j.getString("contentType"), j.getBinary("bytes"), coords,
+        j.getString("kind"));
   }
 }

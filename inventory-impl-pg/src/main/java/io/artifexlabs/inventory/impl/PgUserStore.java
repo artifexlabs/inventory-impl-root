@@ -59,14 +59,15 @@ public class PgUserStore implements UserStore {
 
   @Override
   public CompletionStage<InventoryUser> ensureUser(String email, String displayName, String password, boolean admin) {
-    return this.pool.withTransaction(conn -> conn
-        .preparedQuery("""
+    return this.pool
+        .withTransaction(conn -> conn.preparedQuery("""
             INSERT INTO users (id, email, display_name, admin, password_hash)
             VALUES ($1, $2, $3, $4, $5) ON CONFLICT (email) DO NOTHING""")
-        .execute(Tuple.of(Ulid.next(), email, displayName, admin, Passwords.hash(password)))
-        .flatMap(v -> conn.preparedQuery("SELECT id, email, display_name, admin FROM users WHERE email=$1")
-            .execute(Tuple.of(email)))
-        .map(rs -> (InventoryUser) fromRow(rs.iterator().next()))).subscribeAsCompletionStage();
+            .execute(Tuple.of(Ulid.next(), email, displayName, admin, Passwords.hash(password)))
+            .flatMap(v -> conn.preparedQuery("SELECT id, email, display_name, admin FROM users WHERE email=$1")
+                .execute(Tuple.of(email)))
+            .map(rs -> (InventoryUser) fromRow(rs.iterator().next())))
+        .subscribeAsCompletionStage();
   }
 
   @Override
@@ -81,14 +82,13 @@ public class PgUserStore implements UserStore {
 
   @Override
   public CompletionStage<Boolean> delete(String id) {
-    return this.pool.preparedQuery("DELETE FROM users WHERE id=$1").execute(Tuple.of(id))
-        .map(rs -> rs.rowCount() > 0).subscribeAsCompletionStage();
+    return this.pool.preparedQuery("DELETE FROM users WHERE id=$1").execute(Tuple.of(id)).map(rs -> rs.rowCount() > 0)
+        .subscribeAsCompletionStage();
   }
 
   @Override
   public CompletionStage<Optional<InventoryUser>> setAdmin(String id, boolean admin) {
-    return this.pool
-        .preparedQuery("UPDATE users SET admin=$2 WHERE id=$1 RETURNING id, email, display_name, admin")
+    return this.pool.preparedQuery("UPDATE users SET admin=$2 WHERE id=$1 RETURNING id, email, display_name, admin")
         .execute(Tuple.of(id, admin)).map(rs -> {
           for (Row r : rs)
             return Optional.<InventoryUser>of(fromRow(r));
@@ -112,18 +112,18 @@ public class PgUserStore implements UserStore {
         SELECT u.id, u.email, u.display_name, u.admin FROM users u
         JOIN user_identities i ON i.user_id = u.id
         WHERE i.provider=$1 AND i.subject=$2""").execute(Tuple.of(provider, subject)).map(rs -> {
-          for (Row r : rs)
-            return Optional.<InventoryUser>of(fromRow(r));
-          return Optional.<InventoryUser>empty();
-        }).subscribeAsCompletionStage();
+      for (Row r : rs)
+        return Optional.<InventoryUser>of(fromRow(r));
+      return Optional.<InventoryUser>empty();
+    }).subscribeAsCompletionStage();
   }
 
   @Override
   public CompletionStage<Void> linkIdentity(String userId, String provider, String subject) {
     return this.pool.preparedQuery("""
         INSERT INTO user_identities (provider, subject, user_id)
-        VALUES ($1, $2, $3) ON CONFLICT (provider, subject) DO NOTHING""")
-        .execute(Tuple.of(provider, subject, userId)).map(rs -> (Void) null).subscribeAsCompletionStage();
+        VALUES ($1, $2, $3) ON CONFLICT (provider, subject) DO NOTHING""").execute(Tuple.of(provider, subject, userId))
+        .map(rs -> (Void) null).subscribeAsCompletionStage();
   }
 
   private static DefaultInventoryUser fromRow(Row r) {

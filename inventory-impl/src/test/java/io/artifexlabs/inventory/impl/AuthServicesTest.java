@@ -115,8 +115,8 @@ public class AuthServicesTest {
   public void testInMemorySinceCursor() throws Exception {
     InMemoryAuditSink sink = new InMemoryAuditSink();
     for (int i = 0; i < 5; i++)
-      await(sink.record(new io.artifexlabs.inventory.api.DefaultAuditEvent(Ulid.next(),
-          java.time.Instant.now(), "t", "item.create", "target-" + i, null)));
+      await(sink.record(new io.artifexlabs.inventory.api.DefaultAuditEvent(Ulid.next(), java.time.Instant.now(), "t",
+          "item.create", "target-" + i, null)));
 
     var first = await(sink.since(0, 3));
     assertEquals(3, first.size());

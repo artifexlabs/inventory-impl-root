@@ -32,8 +32,8 @@ public record DefaultUserCreation(String email, String displayName, String passw
 
   @Override
   public JsonObject toJson() {
-    return new JsonObject().put("email", this.email).put("displayName", this.displayName)
-        .put("password", this.password).put("admin", this.admin);
+    return new JsonObject().put("email", this.email).put("displayName", this.displayName).put("password", this.password)
+        .put("admin", this.admin);
   }
 
   public static DefaultUserCreation fromJson(JsonObject j) {

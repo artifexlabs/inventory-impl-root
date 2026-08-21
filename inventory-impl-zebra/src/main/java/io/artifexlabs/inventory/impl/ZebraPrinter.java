@@ -39,12 +39,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * {@link LabelPrinter} for ZPL printers (first hardware: Zebra GK420t,
- * 203 dpi, Ethernet, die-cut media): compose per named format → {@code ^GFA}
- * ZPL encode → TCP 9100. Selected by {@code inventory.printer=zebra-gk420t};
- * the default format comes from {@code inventory.printer.format} and each
- * print may override it (the {@code ?format=} query parameter rides the bus
- * envelope to the labels worker).
+ * {@link LabelPrinter} for ZPL printers (first hardware: Zebra GK420t, 203 dpi, Ethernet, die-cut media): compose per
+ * named format → {@code ^GFA} ZPL encode → TCP 9100. Selected by {@code inventory.printer=zebra-gk420t}; the default
+ * format comes from {@code inventory.printer.format} and each print may override it (the {@code ?format=} query
+ * parameter rides the bus envelope to the labels worker).
  */
 public class ZebraPrinter implements LabelPrinter {
   private final static Logger log = LoggerFactory.getLogger(ZebraPrinter.class);
@@ -54,17 +52,14 @@ public class ZebraPrinter implements LabelPrinter {
   }
 
   /**
-   * format name -> media geometry: standard 2.25×1.25 in, large 2.25×4 in,
-   * x-large 4×4 in, 2x-large 4×6.5 in (all @203 dpi).
+   * format name -> media geometry: standard 2.25×1.25 in, large 2.25×4 in, x-large 4×4 in, 2x-large 4×6.5 in (all @203
+   * dpi).
    */
   // keyed by the LabelPrinter.FORMAT_* names (shared caller vocabulary)
   /** The {@code source} every StatusEvent from this printer carries. */
   private final static String SOURCE = "printer.zebra";
-  private final static Map<String, Geometry> FORMATS = Map.of(
-      FORMAT_STANDARD, new Geometry(457, 254),
-      FORMAT_LARGE, new Geometry(457, 812),
-      FORMAT_X_LARGE, new Geometry(812, 812),
-      FORMAT_2X_LARGE, new Geometry(812, 1320));
+  private final static Map<String, Geometry> FORMATS = Map.of(FORMAT_STANDARD, new Geometry(457, 254), FORMAT_LARGE,
+      new Geometry(457, 812), FORMAT_X_LARGE, new Geometry(812, 812), FORMAT_2X_LARGE, new Geometry(812, 1320));
 
   private final LabelComposer composer = new LabelComposer();
   private final ZplEncoder encoder = new ZplEncoder();
@@ -83,9 +78,8 @@ public class ZebraPrinter implements LabelPrinter {
   }
 
   /**
-   * Resolve location names for the {@code large} layout (default: none —
-   * the location line is simply omitted). Lookup failures never fail a
-   * print; a label without its location line beats no label.
+   * Resolve location names for the {@code large} layout (default: none — the location line is simply omitted). Lookup
+   * failures never fail a print; a label without its location line beats no label.
    */
   /** Route refusals to a status channel; returns this for fluent construction. */
   public ZebraPrinter withStatusPublisher(StatusPublisher status) {
@@ -109,8 +103,8 @@ public class ZebraPrinter implements LabelPrinter {
     Geometry geometry = FORMATS.get(chosen);
     if (geometry == null) {
       log.warn("Unknown label format {} for item {} (know {})", chosen, item.getId(), FORMATS.keySet());
-      this.status.publish(StatusEvent.error("printer.unknown-format",
-          "Label refused: '" + chosen + "' is not a format this printer knows.")
+      this.status.publish(StatusEvent
+          .error("printer.unknown-format", "Label refused: '" + chosen + "' is not a format this printer knows.")
           .source(SOURCE).subject("itemId", item.getId()).subject("format", chosen)
           .detail("Known formats: " + FORMATS.keySet()));
       return CompletableFuture.completedStage(false);
@@ -121,32 +115,30 @@ public class ZebraPrinter implements LabelPrinter {
         String name = item.getDisplayName().orElse(item.getName());
         String expiresOn = item.getExpiration()
             .map(e -> LocalDate.ofInstant(e.when(), java.time.ZoneId.systemDefault()).toString()).orElse(null);
-        boolean absolute = item.getExpiration().map(io.artifexlabs.inventory.api.Expiration::absolute)
-            .orElse(false);
+        boolean absolute = item.getExpiration().map(io.artifexlabs.inventory.api.Expiration::absolute).orElse(false);
         BufferedImage label = switch (chosen) {
         case FORMAT_LARGE -> this.composer.composeLarge(name, item.getId(), item.getType(),
             item.getQuantity().orElse(null), locName.orElse(null), item.isHeavy(), expiresOn, absolute,
-            item.getDescription().orElse(null), LocalDate.now().toString(), qr, geometry.width(),
-            geometry.height());
+            item.getDescription().orElse(null), LocalDate.now().toString(), qr, geometry.width(), geometry.height());
         case FORMAT_X_LARGE -> this.composer.composeXLarge(name, item.getId(), item.getType(),
             item.getQuantity().orElse(null), locName.orElse(null), item.isHeavy(), expiresOn, absolute,
             LocalDate.now().toString(), qr, geometry.width(), geometry.height());
-        case FORMAT_2X_LARGE -> this.composer.compose2xLarge(name, item.getId(), item.getType(),
-            item.getQuantity().orElse(null), locName.orElse(null), item.isHeavy(), expiresOn, absolute,
-            coordinatesLine(item), tagsLine(item), item.getDescription().orElse(null),
-            LocalDate.now().toString(), qr, geometry.width(), geometry.height());
-        default -> this.composer.composeStandard(name, item.getId(), item.getType(),
-            item.getQuantity().orElse(null), locName.orElse(null), item.isHeavy(), expiresOn, absolute,
-            LocalDate.now().toString(), qr, geometry.width(), geometry.height());
+        case FORMAT_2X_LARGE ->
+          this.composer.compose2xLarge(name, item.getId(), item.getType(), item.getQuantity().orElse(null),
+              locName.orElse(null), item.isHeavy(), expiresOn, absolute, coordinatesLine(item), tagsLine(item),
+              item.getDescription().orElse(null), LocalDate.now().toString(), qr, geometry.width(), geometry.height());
+        default -> this.composer.composeStandard(name, item.getId(), item.getType(), item.getQuantity().orElse(null),
+            locName.orElse(null), item.isHeavy(), expiresOn, absolute, LocalDate.now().toString(), qr, geometry.width(),
+            geometry.height());
         };
         this.transport.send(this.encoder.encode(label));
-        log.info("Printed {} label for item {} ({}x{} dots, ZPL)", chosen, item.getId(),
-            label.getWidth(), label.getHeight());
+        log.info("Printed {} label for item {} ({}x{} dots, ZPL)", chosen, item.getId(), label.getWidth(),
+            label.getHeight());
         return true;
       } catch (Exception e) {
         log.warn("Label print failed for item {}: {}", item.getId(), e.toString());
-        this.status.publish(StatusEvent.error("printer.print-failed",
-            "The label could not be printed — the printer did not accept the job.")
+        this.status.publish(StatusEvent
+            .error("printer.print-failed", "The label could not be printed — the printer did not accept the job.")
             .source(SOURCE).subject("itemId", item.getId())
             .detail("Sending the label to the Zebra printer failed: " + e));
         return false;
@@ -155,14 +147,12 @@ public class ZebraPrinter implements LabelPrinter {
   }
 
   /**
-   * The item's OWN pin, rendered for the 2x-large layout ("@ lat, long").
-   * Deliberately not the effective/inherited coordinates — those belong to
-   * the container chain the label already names via the location line.
+   * The item's OWN pin, rendered for the 2x-large layout ("@ lat, long"). Deliberately not the effective/inherited
+   * coordinates — those belong to the container chain the label already names via the location line.
    */
   private static String coordinatesLine(Item item) {
     return item.getCoordinates()
-        .map(c -> String.format(java.util.Locale.ROOT, "@ %.5f, %.5f", c.latitude(), c.longitude()))
-        .orElse(null);
+        .map(c -> String.format(java.util.Locale.ROOT, "@ %.5f, %.5f", c.latitude(), c.longitude())).orElse(null);
   }
 
   /** Sorted, rendered tags ("scuba, color=orange") for the 2x-large layout. */
@@ -174,15 +164,14 @@ public class ZebraPrinter implements LabelPrinter {
   }
 
   /**
-   * The container's name — since Phase 15 "where is it" IS the container.
-   * Best-effort: both layouts show it, and failure means absent.
+   * The container's name — since Phase 15 "where is it" IS the container. Best-effort: both layouts show it, and
+   * failure means absent.
    */
   private CompletionStage<Optional<String>> locationName(Item item) {
     if (this.containerLookup == null || item.getContainerId().isEmpty())
       return CompletableFuture.completedStage(Optional.empty());
     return this.containerLookup.apply(item.getContainerId().get())
-        .thenApply(o -> o.map(c -> c.getDisplayName().orElse(c.getName())))
-        .exceptionally(e -> {
+        .thenApply(o -> o.map(c -> c.getDisplayName().orElse(c.getName()))).exceptionally(e -> {
           log.warn("Container lookup failed for item {}: {}", item.getId(), e.toString());
           return Optional.empty();
         });

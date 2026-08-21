@@ -35,30 +35,24 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * {@link LabelPrinter} for the Brother PT-P750W: compose (QR + name + id) →
- * Brother raster encode → TCP 9100. Selected by {@code inventory.printer=
- * brother-p750w}; the printable dot count comes from the configured tape
- * width (Brother's per-tape pin counts at 180 dpi).
+ * {@link LabelPrinter} for the Brother PT-P750W: compose (QR + name + id) → Brother raster encode → TCP 9100. Selected
+ * by {@code inventory.printer=
+ * brother-p750w}; the printable dot count comes from the configured tape width (Brother's per-tape pin counts at 180
+ * dpi).
  *
- * QRs render module-exact from the scan URL (ongoing item 11): wide tapes
- * (24/18 mm) carry the URL beside name+id text; narrow tapes (12/9 mm) print
- * a QR-only label, dropping to the bare-ULID payload (alphanumeric, version
- * 2 at ECC Q) when the URL cannot reach 2 dots per module — the practical
- * floor for a phone camera. 6 mm has no reliable QR at all (the smallest
- * code is 42 dots at that floor; the tape has 32) and refuses.
+ * QRs render module-exact from the scan URL (ongoing item 11): wide tapes (24/18 mm) carry the URL beside name+id text;
+ * narrow tapes (12/9 mm) print a QR-only label, dropping to the bare-ULID payload (alphanumeric, version 2 at ECC Q)
+ * when the URL cannot reach 2 dots per module — the practical floor for a phone camera. 6 mm has no reliable QR at all
+ * (the smallest code is 42 dots at that floor; the tape has 32) and refuses.
  *
- * One NAMED format exists: {@code qr-only} forces the QR-only layout on any
- * tape (a big square code with no text — e.g. a 116-dot, ~16 mm code on
- * 24 mm tape), riding the same {@code ?format=} plumbing the Zebra formats
- * use. Null/blank format keeps the automatic behavior; any other name is
- * refused without touching the printer, like the Zebra does.
+ * One NAMED format exists: {@code qr-only} forces the QR-only layout on any tape (a big square code with no text — e.g.
+ * a 116-dot, ~16 mm code on 24 mm tape), riding the same {@code ?format=} plumbing the Zebra formats use. Null/blank
+ * format keeps the automatic behavior; any other name is refused without touching the printer, like the Zebra does.
  *
- * Chain printing (ongoing item 10) is expressed by {@link #printBatch}: a
- * run streams down ONE connection so the labels share a single ~25 mm
- * leader. It is deliberately NOT a config flag — the old
- * {@code inventory.printer.chain} sent each label as its own job ending
- * "print without feeding" and hung up, which silently destroyed labels and
- * wedged the printer (hardware-proven 2026-08-18).
+ * Chain printing (ongoing item 10) is expressed by {@link #printBatch}: a run streams down ONE connection so the labels
+ * share a single ~25 mm leader. It is deliberately NOT a config flag — the old {@code inventory.printer.chain} sent
+ * each label as its own job ending "print without feeding" and hung up, which silently destroyed labels and wedged the
+ * printer (hardware-proven 2026-08-18).
  */
 public class BrotherPTouchPrinter implements LabelPrinter {
   private final static Logger log = LoggerFactory.getLogger(BrotherPTouchPrinter.class);
@@ -76,8 +70,8 @@ public class BrotherPTouchPrinter implements LabelPrinter {
   // refusal beats wasted stock). FORMAT_QR_ONLY alone is width-independent.
   /** The {@code source} every StatusEvent from this printer carries. */
   private final static String SOURCE = "printer.brother";
-  private final static String KNOWN_FORMATS = String.join(", ", FORMAT_TINY, FORMAT_STANDARD_QR_ONLY,
-      FORMAT_STANDARD, FORMAT_LARGE, FORMAT_QR_ONLY);
+  private final static String KNOWN_FORMATS = String.join(", ", FORMAT_TINY, FORMAT_STANDARD_QR_ONLY, FORMAT_STANDARD,
+      FORMAT_LARGE, FORMAT_QR_ONLY);
 
   private final LabelComposer composer = new LabelComposer();
   private final BrotherRasterEncoder encoder = new BrotherRasterEncoder();
@@ -97,8 +91,8 @@ public class BrotherPTouchPrinter implements LabelPrinter {
     this.tapeMm = tapeMm;
     Integer d = TAPE_DOTS.get(tapeMm);
     if (d == null)
-      throw new IllegalArgumentException("unsupported TZe tape width: " + tapeMm + "mm (know "
-          + TAPE_DOTS.keySet() + ")");
+      throw new IllegalArgumentException(
+          "unsupported TZe tape width: " + tapeMm + "mm (know " + TAPE_DOTS.keySet() + ")");
     this.dots = d;
   }
 
@@ -115,13 +109,12 @@ public class BrotherPTouchPrinter implements LabelPrinter {
         if (label == null)
           return false;
         this.transport.send(this.encoder.encode(label, this.tapeMm));
-        log.info("Printed label for item {} ({} raster lines, {}mm tape)", item.getId(),
-            label.getWidth(), this.tapeMm);
+        log.info("Printed label for item {} ({} raster lines, {}mm tape)", item.getId(), label.getWidth(), this.tapeMm);
         return true;
       } catch (Exception e) {
         log.warn("Label print failed for item {}: {}", item.getId(), e.toString());
-        this.status.publish(StatusEvent.error("printer.print-failed",
-            "The label could not be printed — the printer did not accept the job.")
+        this.status.publish(StatusEvent
+            .error("printer.print-failed", "The label could not be printed — the printer did not accept the job.")
             .source(SOURCE).subject("itemId", item.getId()).subject("tapeMm", String.valueOf(this.tapeMm))
             .detail("Sending the label to the Brother printer failed: " + e));
         return false;
@@ -130,15 +123,12 @@ public class BrotherPTouchPrinter implements LabelPrinter {
   }
 
   /**
-   * A whole run as ONE job over ONE connection, so the labels share a single
-   * leader instead of wasting ~25 mm per cut (ongoing item 10). Composing
-   * happens up front; a label that cannot be rendered (e.g. no scannable QR
-   * fits the tape) fails the batch rather than printing a partial run,
-   * because a half-printed strip is worse than none.
+   * A whole run as ONE job over ONE connection, so the labels share a single leader instead of wasting ~25 mm per cut
+   * (ongoing item 10). Composing happens up front; a label that cannot be rendered (e.g. no scannable QR fits the tape)
+   * fails the batch rather than printing a partial run, because a half-printed strip is worse than none.
    */
   @Override
-  public CompletionStage<Boolean> printBatch(java.util.List<LabelRequest> requests,
-      boolean halfCutBetween) {
+  public CompletionStage<Boolean> printBatch(java.util.List<LabelRequest> requests, boolean halfCutBetween) {
     if (requests == null || requests.isEmpty())
       return CompletableFuture.completedStage(true);
     return CompletableFuture.supplyAsync(() -> {
@@ -147,12 +137,12 @@ public class BrotherPTouchPrinter implements LabelPrinter {
         for (LabelRequest r : requests) {
           BufferedImage label = compose(r.item(), r.scanUrl(), r.format());
           if (label == null) {
-            log.warn("Batch refused: no scannable label fits {}mm tape for item {}", this.tapeMm,
-                r.item().getId());
-            this.status.publish(StatusEvent.error("printer.batch-refused",
-                "The label run was refused because one of its labels could not be produced.")
-                .source(SOURCE).subject("itemId", r.item().getId())
-                .subject("tapeMm", String.valueOf(this.tapeMm)).subject("count", String.valueOf(requests.size()))
+            log.warn("Batch refused: no scannable label fits {}mm tape for item {}", this.tapeMm, r.item().getId());
+            this.status.publish(StatusEvent
+                .error("printer.batch-refused",
+                    "The label run was refused because one of its labels could not be produced.")
+                .source(SOURCE).subject("itemId", r.item().getId()).subject("tapeMm", String.valueOf(this.tapeMm))
+                .subject("count", String.valueOf(requests.size()))
                 .detail("A chained run prints as one strip, so a label that cannot be rendered "
                     + "cancels the whole run rather than printing a partial one."));
             return false;
@@ -162,13 +152,13 @@ public class BrotherPTouchPrinter implements LabelPrinter {
         // ONE send: the encoder streams every page with the correct
         // starting-page flags and ends only the last with 0x1A
         this.transport.send(this.encoder.encodeBatch(labels, this.tapeMm, halfCutBetween));
-        log.info("Printed a chained run of {} labels ({}mm tape, one leader, {})", labels.size(),
-            this.tapeMm, halfCutBetween ? "half cut between" : "full cut between");
+        log.info("Printed a chained run of {} labels ({}mm tape, one leader, {})", labels.size(), this.tapeMm,
+            halfCutBetween ? "half cut between" : "full cut between");
         return true;
       } catch (Exception e) {
         log.warn("Batch label print failed: {}", e.toString());
-        this.status.publish(StatusEvent.error("printer.print-failed",
-            "The label run could not be printed — the printer did not accept the job.")
+        this.status.publish(StatusEvent
+            .error("printer.print-failed", "The label run could not be printed — the printer did not accept the job.")
             .source(SOURCE).subject("count", String.valueOf(requests.size()))
             .subject("tapeMm", String.valueOf(this.tapeMm))
             .detail("Sending the chained run to the Brother printer failed: " + e));
@@ -187,10 +177,10 @@ public class BrotherPTouchPrinter implements LabelPrinter {
         return true;
       } catch (Exception e) {
         log.warn("Tape feed failed: {}", e.toString());
-        this.status.publish(StatusEvent.error("printer.feed-failed",
-            "The tape could not be fed — the printer did not accept the job.")
-            .source(SOURCE).subject("tapeMm", String.valueOf(this.tapeMm))
-            .detail("Sending the feed command to the Brother printer failed: " + e));
+        this.status.publish(
+            StatusEvent.error("printer.feed-failed", "The tape could not be fed — the printer did not accept the job.")
+                .source(SOURCE).subject("tapeMm", String.valueOf(this.tapeMm))
+                .detail("Sending the feed command to the Brother printer failed: " + e));
         return false;
       }
     });
@@ -203,19 +193,19 @@ public class BrotherPTouchPrinter implements LabelPrinter {
       return this.dots < MIN_TEXT_DOTS ? composeQrOnly(item, scanUrl) : composeNameId(item, scanUrl);
     }
     return switch (format) {
-      case FORMAT_QR_ONLY -> composeQrOnly(item, scanUrl);
-      case FORMAT_TINY -> tapeIs(9, format, item) ? composeQrOnly(item, null) : null;
-      case FORMAT_STANDARD_QR_ONLY -> tapeIs(12, format, item) ? composeQrOnly(item, scanUrl) : null;
-      case FORMAT_STANDARD -> tapeIs(12, format, item) ? composeCompact(item, scanUrl) : null;
-      case FORMAT_LARGE -> tapeIs(24, format, item) ? composeNameId(item, scanUrl) : null;
-      default -> {
-        log.warn("Unknown label format {} for item {} (know [{}])", format, item.getId(), KNOWN_FORMATS);
-        this.status.publish(StatusEvent.error("printer.unknown-format",
-            "Label refused: '" + format + "' is not a format this printer knows.")
-            .source(SOURCE).subject("itemId", item.getId()).subject("format", format)
-            .detail("Known formats: " + KNOWN_FORMATS));
-        yield null;
-      }
+    case FORMAT_QR_ONLY -> composeQrOnly(item, scanUrl);
+    case FORMAT_TINY -> tapeIs(9, format, item) ? composeQrOnly(item, null) : null;
+    case FORMAT_STANDARD_QR_ONLY -> tapeIs(12, format, item) ? composeQrOnly(item, scanUrl) : null;
+    case FORMAT_STANDARD -> tapeIs(12, format, item) ? composeCompact(item, scanUrl) : null;
+    case FORMAT_LARGE -> tapeIs(24, format, item) ? composeNameId(item, scanUrl) : null;
+    default -> {
+      log.warn("Unknown label format {} for item {} (know [{}])", format, item.getId(), KNOWN_FORMATS);
+      this.status.publish(StatusEvent
+          .error("printer.unknown-format", "Label refused: '" + format + "' is not a format this printer knows.")
+          .source(SOURCE).subject("itemId", item.getId()).subject("format", format)
+          .detail("Known formats: " + KNOWN_FORMATS));
+      yield null;
+    }
     };
   }
 
@@ -224,9 +214,10 @@ public class BrotherPTouchPrinter implements LabelPrinter {
       return true;
     log.warn("Format {} needs {}mm tape but {}mm is loaded — refusing label for item {}", format, requiredMm,
         this.tapeMm, item.getId());
-    this.status.publish(StatusEvent.error("printer.tape-mismatch",
-        "Label refused: format '" + format + "' needs " + requiredMm + " mm tape, but " + this.tapeMm
-            + " mm is loaded.")
+    this.status.publish(StatusEvent
+        .error("printer.tape-mismatch",
+            "Label refused: format '" + format + "' needs " + requiredMm + " mm tape, but " + this.tapeMm
+                + " mm is loaded.")
         .source(SOURCE).subject("itemId", item.getId()).subject("format", format)
         .subject("requiredTapeMm", String.valueOf(requiredMm)).subject("loadedTapeMm", String.valueOf(this.tapeMm))
         .detail("Load " + requiredMm + " mm tape, or choose a format that matches the tape in the printer."));
@@ -234,24 +225,23 @@ public class BrotherPTouchPrinter implements LabelPrinter {
   }
 
   /**
-   * The scannable matrix for this tape: the URL when given (ECC L keeps it
-   * v3), else — or when the URL cannot reach 2 dots/module — the bare ULID
-   * at ECC Q, which still resolves in our own scanners. null = nothing fits.
+   * The scannable matrix for this tape: the URL when given (ECC L keeps it v3), else — or when the URL cannot reach 2
+   * dots/module — the bare ULID at ECC Q, which still resolves in our own scanners. null = nothing fits.
    */
   private com.google.zxing.common.BitMatrix scannableMatrix(Item item, String scanUrl) {
     String payload = scanUrl != null && !scanUrl.isBlank() ? scanUrl : item.getId();
-    var ecc = payload.equals(item.getId())
-        ? com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.Q
+    var ecc = payload.equals(item.getId()) ? com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.Q
         : com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.L;
     var matrix = QrCodes.bareMatrix(payload, ecc);
     if (this.dots / matrix.getWidth() < MIN_DOTS_PER_MODULE) {
       matrix = QrCodes.bareMatrix(item.getId(), com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.Q);
     }
     if (this.dots / matrix.getWidth() < MIN_DOTS_PER_MODULE) {
-      log.warn("No scannable QR fits {}mm tape ({} dots) for item {} — smallest payload needs {} modules",
-          this.tapeMm, this.dots, item.getId(), matrix.getWidth());
-      this.status.publish(StatusEvent.error("printer.no-scannable-qr",
-          "Label refused: no QR code small enough to stay scannable fits " + this.tapeMm + " mm tape.")
+      log.warn("No scannable QR fits {}mm tape ({} dots) for item {} — smallest payload needs {} modules", this.tapeMm,
+          this.dots, item.getId(), matrix.getWidth());
+      this.status.publish(StatusEvent
+          .error("printer.no-scannable-qr",
+              "Label refused: no QR code small enough to stay scannable fits " + this.tapeMm + " mm tape.")
           .source(SOURCE).subject("itemId", item.getId()).subject("tapeMm", String.valueOf(this.tapeMm))
           .subject("modulesNeeded", String.valueOf(matrix.getWidth()))
           .detail("Even the shortest payload needs " + matrix.getWidth() + " modules, which this tape cannot "
@@ -270,8 +260,7 @@ public class BrotherPTouchPrinter implements LabelPrinter {
 
   private BufferedImage composeNameId(Item item, String scanUrl) {
     String payload = scanUrl != null && !scanUrl.isBlank() ? scanUrl : item.getId();
-    var ecc = payload.equals(item.getId())
-        ? com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.Q
+    var ecc = payload.equals(item.getId()) ? com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.Q
         : com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.L;
     var matrix = QrCodes.bareMatrix(payload, ecc);
     int dpm = Math.max(1, this.dots / matrix.getWidth());
@@ -284,11 +273,12 @@ public class BrotherPTouchPrinter implements LabelPrinter {
     if (matrix == null)
       return null;
     int dpm = this.dots / matrix.getWidth();
-    String weightLabel = item.getWeight().map(w -> w.grams() >= 1000.0
-        ? String.format(java.util.Locale.ROOT, "%.1f kg", w.toKilograms())
-        : Math.round(w.grams()) + " g").orElse(null);
+    String weightLabel = item.getWeight()
+        .map(w -> w.grams() >= 1000.0 ? String.format(java.util.Locale.ROOT, "%.1f kg", w.toKilograms())
+            : Math.round(w.grams()) + " g")
+        .orElse(null);
     return this.composer.composeCompactStrip(item.getDisplayName().orElse(item.getName()),
-        java.time.LocalDate.now().toString(), weightLabel, item.isHeavy(),
-        QrCodes.render(matrix, dpm), 4 * dpm, this.dots);
+        java.time.LocalDate.now().toString(), weightLabel, item.isHeavy(), QrCodes.render(matrix, dpm), 4 * dpm,
+        this.dots);
   }
 }

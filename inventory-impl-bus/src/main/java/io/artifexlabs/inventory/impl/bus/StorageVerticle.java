@@ -30,27 +30,21 @@ import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonObject;
 
 /**
- * The single door to storage (PLAN.md Phase 21, ask 2). Every read and every write
- * of the backing store passes through this verticle; no other verticle holds
- * an {@code InventorySystem}, {@code AssetStore}, {@code UserStore},
- * {@code TokenService}, {@code RegionSystem}, {@code AuditReader} or
- * {@code AuditSink} reference at all, which is what makes the storage
- * mechanism replaceable from the outside.
+ * The single door to storage (PLAN.md Phase 21, ask 2). Every read and every write of the backing store passes through
+ * this verticle; no other verticle holds an {@code InventorySystem}, {@code AssetStore}, {@code UserStore},
+ * {@code TokenService}, {@code RegionSystem}, {@code AuditReader} or {@code AuditSink} reference at all, which is what
+ * makes the storage mechanism replaceable from the outside.
  *
  * <p>
- * <b>The operations are DOMAIN operations, never row-level CRUD.</b> That is
- * the load-bearing constraint: bus messages cannot share a database
- * transaction, so anything a caller would have to compose from two messages
- * would tear the atomicity the Postgres backend guarantees in-process. Every
- * action registered here is one whole unit of work — which is exactly the
- * shape {@code BusActions} already had, and why this was tractable.
+ * <b>The operations are DOMAIN operations, never row-level CRUD.</b> That is the load-bearing constraint: bus messages
+ * cannot share a database transaction, so anything a caller would have to compose from two messages would tear the
+ * atomicity the Postgres backend guarantees in-process. Every action registered here is one whole unit of work — which
+ * is exactly the shape {@code BusActions} already had, and why this was tractable.
  *
  * <p>
- * This address is INTERNAL and deliberately unguarded: admission (fabric
- * token and role) already happened at the public service verticle that
- * forwarded the envelope. Exposing it would bypass that check, so it must
- * never be reachable from outside the bus — which the deployment already
- * ensures, because bus membership is access (VERTICLES.md).
+ * This address is INTERNAL and deliberately unguarded: admission (fabric token and role) already happened at the public
+ * service verticle that forwarded the envelope. Exposing it would bypass that check, so it must never be reachable from
+ * outside the bus — which the deployment already ensures, because bus membership is access (VERTICLES.md).
  */
 public class StorageVerticle extends AbstractVerticle {
 
@@ -70,10 +64,8 @@ public class StorageVerticle extends AbstractVerticle {
   }
 
   /**
-   * Internal-only operations with no public {@code BusActions} counterpart:
-   * an orchestrating verticle needs them, but no external caller may name
-   * them. They are namespaced so they can never collide with the public
-   * vocabulary.
+   * Internal-only operations with no public {@code BusActions} counterpart: an orchestrating verticle needs them, but
+   * no external caller may name them. They are namespaced so they can never collide with the public vocabulary.
    */
   public final static String AUDIT_RECORD = "storage.audit.record";
   /** Create an item (plus optional catalog image) from a UPC spec, atomically. */
@@ -95,22 +87,21 @@ public class StorageVerticle extends AbstractVerticle {
     on(ASSETS_CREATE_FROM_UPC, env -> {
       JsonObject d = env.data();
       JsonObject spec = d.getJsonObject("spec");
-      var creation = new io.artifexlabs.inventory.api.UpcItemCreation(spec.getString("gtin13"),
-          spec.getString("name"), spec.getString("displayName"), spec.getString("type"),
-          spec.getString("description"), spec.getDouble("weightGrams"), spec.getString("containerId"),
+      var creation = new io.artifexlabs.inventory.api.UpcItemCreation(spec.getString("gtin13"), spec.getString("name"),
+          spec.getString("displayName"), spec.getString("type"), spec.getString("description"),
+          spec.getDouble("weightGrams"), spec.getString("containerId"),
           spec.getJsonArray("tags", new io.vertx.core.json.JsonArray()).stream()
-              .map(io.vertx.core.json.JsonObject.class::cast)
-              .map(io.artifexlabs.inventory.api.ItemTag::fromJson).toList());
+              .map(io.vertx.core.json.JsonObject.class::cast).map(io.artifexlabs.inventory.api.ItemTag::fromJson)
+              .toList());
       return services.assets().actingAs(env.principal())
           .createItemFromUpc(creation, d.getString("filename"), d.getString("contentType"), d.getBinary("bytes"))
           .thenApply(o -> o.map(made -> {
-            JsonObject reply = new JsonObject()
-                .put("item", io.artifexlabs.inventory.api.ItemFactory.serialize(made.item()));
+            JsonObject reply = new JsonObject().put("item",
+                io.artifexlabs.inventory.api.ItemFactory.serialize(made.item()));
             if (made.asset() != null)
               reply.put("asset", made.asset().toJson());
             return (Object) reply;
-          }).orElseThrow(() -> BusServiceException.notFound("no such container")))
-          .exceptionally(e -> {
+          }).orElseThrow(() -> BusServiceException.notFound("no such container"))).exceptionally(e -> {
             // the backend signals "this marker is already claimed" with an
             // IllegalStateException; that meaning must be translated HERE,
             // because a bus reply only carries a code (it used to be mapped
@@ -125,9 +116,9 @@ public class StorageVerticle extends AbstractVerticle {
     });
     // the audit sink is storage too: an orchestrator records through here
     // rather than holding the sink itself
-    on(AUDIT_RECORD, env -> services.auditSink()
-        .record(io.artifexlabs.inventory.api.AuditEventFactory.deserialize(env.data()))
-        .thenApply(v -> (Object) new JsonObject().put("recorded", true)));
+    on(AUDIT_RECORD,
+        env -> services.auditSink().record(io.artifexlabs.inventory.api.AuditEventFactory.deserialize(env.data()))
+            .thenApply(v -> (Object) new JsonObject().put("recorded", true)));
   }
 
   final void on(String action, StorageHandler handler) {

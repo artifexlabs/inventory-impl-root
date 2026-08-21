@@ -39,9 +39,8 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 
 /**
- * Adapters against a LOCAL stub server serving canned catalog JSON — the
- * network is never touched. Pins the field mapping, the flavor fallback
- * order, and the degrade-to-miss failure modes.
+ * Adapters against a LOCAL stub server serving canned catalog JSON — the network is never touched. Pins the field
+ * mapping, the flavor fallback order, and the degrade-to-miss failure modes.
  */
 public class CatalogAdaptersTest {
 
@@ -69,7 +68,9 @@ public class CatalogAdaptersTest {
          "weight":"3.6 pounds","images":["http://127.0.0.1:%d/image.jpg"]}]}""".formatted(portOf())));
     stub.createContext("/updb429/lookup", ex -> respond(ex, 429, "{\"code\":\"TOO_FAST\"}"));
     stub.createContext("/image.jpg", ex -> {
-      byte[] bytes = new byte[] { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 1, 2, 3 };
+      byte[] bytes = new byte[] {
+          (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, 1, 2, 3
+      };
       ex.getResponseHeaders().add("Content-Type", "image/jpeg");
       ex.sendResponseHeaders(200, bytes.length);
       try (OutputStream out = ex.getResponseBody()) {
@@ -151,8 +152,7 @@ public class CatalogAdaptersTest {
       counted.incrementAndGet();
       return CompletableFuture.completedStage(Optional.empty());
     };
-    var composite = new CompositeCatalog(
-        List.of(counting, new OpenFactsCatalog(List.of(base + "/hit")), counting));
+    var composite = new CompositeCatalog(List.of(counting, new OpenFactsCatalog(List.of(base + "/hit")), counting));
     assertEquals("Cola Can", await(composite.lookup(GTIN)).get().name());
     assertEquals(1, counted.get(), "sources AFTER the hit are never asked (rate limits are precious)");
   }

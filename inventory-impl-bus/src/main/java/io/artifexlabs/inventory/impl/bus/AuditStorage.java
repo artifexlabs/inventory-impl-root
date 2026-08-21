@@ -32,10 +32,9 @@ import io.vertx.core.json.JsonArray;
  * to any reader.
  */
 /**
- * Audit operations against the backing store (PLAN.md Phase 21, ask 2). These are
- * whole units of work, never composable row CRUD: a caller that had to
- * stitch two of them together would lose the transaction the backend
- * guarantees inside one.
+ * Audit operations against the backing store (PLAN.md Phase 21, ask 2). These are whole units of work, never composable
+ * row CRUD: a caller that had to stitch two of them together would lose the transaction the backend guarantees inside
+ * one.
  */
 final class AuditStorage {
 
@@ -46,14 +45,13 @@ final class AuditStorage {
   }
 
   static void register(StorageVerticle.Registrar reg, AuditReader audit) {
-    reg.on(BusActions.AUDIT_RECENT, env -> audit
-        .recent(clamp(env.data().getInteger("limit", 50)), Math.max(0, env.data().getInteger("offset", 0)))
-        .thenApply(AuditStorage::serialize));
+    reg.on(BusActions.AUDIT_RECENT,
+        env -> audit.recent(clamp(env.data().getInteger("limit", 50)), Math.max(0, env.data().getInteger("offset", 0)))
+            .thenApply(AuditStorage::serialize));
     reg.on(BusActions.AUDIT_BY_TARGET,
         env -> audit.byTarget(Envelopes.requireTarget(env), clamp(env.data().getInteger("limit", 50)))
             .thenApply(AuditStorage::serialize));
-    }
-
+  }
 
   private static int clamp(int limit) {
     return Math.max(1, Math.min(limit, MAX_LIMIT));

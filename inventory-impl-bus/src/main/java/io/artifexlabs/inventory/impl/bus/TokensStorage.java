@@ -29,9 +29,8 @@ import io.vertx.core.json.JsonArray;
 
 /** Token administration over the bus (admin role via the guard). */
 /**
- * Tokens operations against the backing store (PLAN.md Phase 21, ask 2). These are
- * whole units of work, never composable row CRUD: a caller that had to
- * stitch two of them together would lose the transaction the backend
+ * Tokens operations against the backing store (PLAN.md Phase 21, ask 2). These are whole units of work, never
+ * composable row CRUD: a caller that had to stitch two of them together would lose the transaction the backend
  * guarantees inside one.
  */
 final class TokensStorage {
@@ -52,6 +51,6 @@ final class TokensStorage {
             .thenApply(v -> null);
       });
     });
-    }
+  }
 
 }

@@ -24,16 +24,14 @@ import io.vertx.core.AbstractVerticle;
 import io.vertx.core.json.JsonObject;
 
 /**
- * The baseline consumer of the {@code status.events} topic: every status
- * event also reaches the operator's log, at the severity it claims.
+ * The baseline consumer of the {@code status.events} topic: every status event also reaches the operator's log, at the
+ * severity it claims.
  *
  * <p>
- * This exists so the topic is never write-only — until the SSE gateway
- * lands (PLAN.md Phase 21), this verticle is the ONLY consumer, and after
- * it lands this remains the record for anyone reading logs. It deliberately
- * duplicates what the emitting component already logged locally: the point
- * is that one subscription shows every emitter's trouble in one place, in a
- * single machine-greppable format.
+ * This exists so the topic is never write-only — until the SSE gateway lands (PLAN.md Phase 21), this verticle is the
+ * ONLY consumer, and after it lands this remains the record for anyone reading logs. It deliberately duplicates what
+ * the emitting component already logged locally: the point is that one subscription shows every emitter's trouble in
+ * one place, in a single machine-greppable format.
  */
 public class StatusLogVerticle extends AbstractVerticle {
   private final static org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(StatusLogVerticle.class);
@@ -44,8 +42,10 @@ public class StatusLogVerticle extends AbstractVerticle {
       try {
         StatusEvent event = StatusEvents.fromWire(message.body());
         String line = "status {} [{}] {} — {} (subject={}, actor={})";
-        Object[] args = {event.severity(), event.code(), event.source(), event.message(), event.subject(),
-            event.actorId().orElse("-")};
+        Object[] args = {
+            event.severity(), event.code(), event.source(), event.message(), event.subject(),
+            event.actorId().orElse("-")
+        };
         switch (event.severity()) {
         case ERROR -> log.error(line, args);
         case WARNING -> log.warn(line, args);

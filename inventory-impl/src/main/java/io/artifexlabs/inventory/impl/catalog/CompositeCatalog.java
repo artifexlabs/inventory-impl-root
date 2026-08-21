@@ -26,9 +26,8 @@ import io.artifexlabs.inventory.api.CatalogEntry;
 import io.artifexlabs.inventory.api.UpcCatalog;
 
 /**
- * Ordered catalog sources, first hit wins. SEQUENTIAL by design: the
- * fallback (UPCitemdb trial) is rate-limited, so it is only asked when the
- * open-data sources miss.
+ * Ordered catalog sources, first hit wins. SEQUENTIAL by design: the fallback (UPCitemdb trial) is rate-limited, so it
+ * is only asked when the open-data sources miss.
  */
 public class CompositeCatalog implements UpcCatalog {
 
@@ -46,8 +45,7 @@ public class CompositeCatalog implements UpcCatalog {
   private CompletionStage<Optional<CatalogEntry>> trySource(String gtin13, int index) {
     if (index >= this.sources.size())
       return CompletableFuture.completedStage(Optional.empty());
-    return this.sources.get(index).lookup(gtin13)
-        .thenCompose(found -> found.isPresent() ? CompletableFuture.completedStage(found)
-            : trySource(gtin13, index + 1));
+    return this.sources.get(index).lookup(gtin13).thenCompose(
+        found -> found.isPresent() ? CompletableFuture.completedStage(found) : trySource(gtin13, index + 1));
   }
 }

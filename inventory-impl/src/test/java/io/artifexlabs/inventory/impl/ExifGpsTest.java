@@ -48,9 +48,13 @@ public class ExifGpsTest {
     assertTrue(ExifGps.extract(null).isEmpty());
     assertTrue(ExifGps.extract(new byte[0]).isEmpty());
     assertTrue(ExifGps.extract("not a jpeg at all".getBytes()).isEmpty());
-    assertTrue(ExifGps.extract(new byte[] { (byte) 0x89, 'P', 'N', 'G' }).isEmpty());
+    assertTrue(ExifGps.extract(new byte[] {
+        (byte) 0x89, 'P', 'N', 'G'
+    }).isEmpty());
     // a JPEG with no APP1 at all
-    assertTrue(ExifGps.extract(new byte[] { (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xD9 }).isEmpty());
+    assertTrue(ExifGps.extract(new byte[] {
+        (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xD9
+    }).isEmpty());
     // truncated mid-APP1 must not throw
     byte[] full = GpsJpeg.withGps(1, 2, 3, "N", 4, 5, 6, "E");
     byte[] cut = java.util.Arrays.copyOf(full, full.length / 2);

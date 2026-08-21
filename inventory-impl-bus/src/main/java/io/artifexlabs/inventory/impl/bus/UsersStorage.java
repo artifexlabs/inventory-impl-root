@@ -36,10 +36,9 @@ import io.vertx.core.json.JsonObject;
  * self-delete refusal keys on the envelope's acting userId.
  */
 /**
- * Users operations against the backing store (PLAN.md Phase 21, ask 2). These are
- * whole units of work, never composable row CRUD: a caller that had to
- * stitch two of them together would lose the transaction the backend
- * guarantees inside one.
+ * Users operations against the backing store (PLAN.md Phase 21, ask 2). These are whole units of work, never composable
+ * row CRUD: a caller that had to stitch two of them together would lose the transaction the backend guarantees inside
+ * one.
  */
 final class UsersStorage {
 
@@ -47,8 +46,8 @@ final class UsersStorage {
   }
 
   static void register(StorageVerticle.Registrar reg, UserStore users, AuditSink audit) {
-    reg.on(BusActions.USERS_LIST, env -> users.list()
-        .thenApply(list -> new JsonArray(list.stream().map(UserFactory::serialize).toList())));
+    reg.on(BusActions.USERS_LIST,
+        env -> users.list().thenApply(list -> new JsonArray(list.stream().map(UserFactory::serialize).toList())));
     reg.on(BusActions.USERS_CREATE, env -> {
       final DefaultUserCreation creation;
       try {
@@ -57,9 +56,9 @@ final class UsersStorage {
         throw BusServiceException.badRequest(e.getMessage());
       }
       return users.ensureUser(creation.email(), creation.displayName(), creation.password(), creation.admin())
-          .thenCompose(u -> record(audit, env.principal(), "user.create", u.getId(),
-              new JsonObject().put("email", u.getEmail()))
-              .thenApply(v -> UserFactory.serialize(u)));
+          .thenCompose(
+              u -> record(audit, env.principal(), "user.create", u.getId(), new JsonObject().put("email", u.getEmail()))
+                  .thenApply(v -> UserFactory.serialize(u)));
     });
     reg.on(BusActions.USERS_DELETE, env -> {
       String id = Envelopes.requireTarget(env);
@@ -73,13 +72,13 @@ final class UsersStorage {
     });
     reg.on(BusActions.USERS_SET_ADMIN, env -> {
       var change = DefaultAdminChange.fromJson(env.data());
-      return users.setAdmin(change.userId(), change.admin()).thenCompose(o -> o
-          .map(u -> record(audit, env.principal(), "user.set-admin", change.userId(),
-              new JsonObject().put("admin", change.admin())).thenApply(v -> (Object) UserFactory.serialize(u)))
-          .orElseThrow(() -> BusServiceException.notFound("no such user")));
+      return users.setAdmin(change.userId(), change.admin())
+          .thenCompose(o -> o
+              .map(u -> record(audit, env.principal(), "user.set-admin", change.userId(),
+                  new JsonObject().put("admin", change.admin())).thenApply(v -> (Object) UserFactory.serialize(u)))
+              .orElseThrow(() -> BusServiceException.notFound("no such user")));
     });
-    }
-
+  }
 
   private static java.util.concurrent.CompletionStage<Void> record(AuditSink audit, String principal, String action,
       String targetId, JsonObject details) {

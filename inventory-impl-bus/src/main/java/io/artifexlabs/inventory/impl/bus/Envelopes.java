@@ -20,8 +20,8 @@ package io.artifexlabs.inventory.impl.bus;
 import io.artifexlabs.inventory.api.bus.BusEnvelope;
 
 /**
- * Envelope reading shared by the public service verticles and the storage
- * layer behind them — the two halves the PLAN.md Phase 21 split created.
+ * Envelope reading shared by the public service verticles and the storage layer behind them — the two halves the
+ * PLAN.md Phase 21 split created.
  */
 final class Envelopes {
 

@@ -30,17 +30,14 @@ import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 
 /**
- * Publishes {@link StatusEvent}s on the Vert.x event bus — the firehose
- * address plus the per-severity address, always {@code publish} (fan-out),
- * never {@code send}. Whether that bus is process-local or clustered is
- * purely Vert.x configuration; this class is identical either way.
+ * Publishes {@link StatusEvent}s on the Vert.x event bus — the firehose address plus the per-severity address, always
+ * {@code publish} (fan-out), never {@code send}. Whether that bus is process-local or clustered is purely Vert.x
+ * configuration; this class is identical either way.
  *
  * <p>
- * The event's id and timestamp are stamped HERE, at publication, so identity
- * and time agree with the order consumers actually observe. Failures are
- * swallowed by contract: no user action may fail because its notification
- * could not be delivered — the audit trail remains the record, this is the
- * doorbell.
+ * The event's id and timestamp are stamped HERE, at publication, so identity and time agree with the order consumers
+ * actually observe. Failures are swallowed by contract: no user action may fail because its notification could not be
+ * delivered — the audit trail remains the record, this is the doorbell.
  */
 public class VertxStatusPublisher implements StatusPublisher {
   private final static org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(VertxStatusPublisher.class);

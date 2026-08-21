@@ -100,10 +100,9 @@ public class BrotherPTouchPrinterTest {
   }
 
   /**
-   * Raster lines across a WHOLE job or batch, by walking the protocol:
-   * one-time init, then per page a print-information header, modes, raster
-   * lines ('G' + 2-byte length + 16 data bytes, or 'Z'), ending 0x0C
-   * (more pages) or 0x1A (run complete).
+   * Raster lines across a WHOLE job or batch, by walking the protocol: one-time init, then per page a print-information
+   * header, modes, raster lines ('G' + 2-byte length + 16 data bytes, or 'Z'), ending 0x0C (more pages) or 0x1A (run
+   * complete).
    */
   private static int rasterLines(byte[] job) {
     int lines = 0;
@@ -113,25 +112,25 @@ public class BrotherPTouchPrinterTest {
       if (b == 0x1B) {
         int cmd = job[at + 2] & 0xFF;
         at += switch (cmd) {
-        case 0x41 -> 4;   // ESC i A  cut-each-N
-        case 0x7A -> 13;  // ESC i z  print information
-        case 0x4D -> 4;   // ESC i M  various mode
-        case 0x4B -> 4;   // ESC i K  advanced mode
-        case 0x64 -> 5;   // ESC i d  margin
+        case 0x41 -> 4; // ESC i A cut-each-N
+        case 0x7A -> 13; // ESC i z print information
+        case 0x4D -> 4; // ESC i M various mode
+        case 0x4B -> 4; // ESC i K advanced mode
+        case 0x64 -> 5; // ESC i d margin
         default -> throw new AssertionError("unexpected ESC command 0x" + Integer.toHexString(cmd));
         };
       } else if (b == 0x4D) {
-        at += 2;          // M 00     compression select
+        at += 2; // M 00 compression select
       } else if (b == 0x47) {
         lines++;
-        at += 3 + 16;     // 'G' + length + one head-width of data
+        at += 3 + 16; // 'G' + length + one head-width of data
       } else if (b == 0x5A) {
         lines++;
         at += 1;
       } else if (b == 0x0C) {
-        at += 1;          // page break: keep walking the next page
+        at += 1; // page break: keep walking the next page
       } else if (b == 0x1A) {
-        return lines;     // run complete
+        return lines; // run complete
       } else {
         throw new AssertionError("unexpected byte 0x" + Integer.toHexString(b) + " at " + at);
       }
@@ -154,16 +153,18 @@ public class BrotherPTouchPrinterTest {
           throw new RuntimeException(e);
         }
       });
-      assertTrue(printer.printBatch(java.util.List.of(
-          new io.artifexlabs.inventory.api.LabelPrinter.LabelRequest(item(), SCAN_URL, qrPng(), null),
-          new io.artifexlabs.inventory.api.LabelPrinter.LabelRequest(item(), SCAN_URL, qrPng(), null)))
+      assertTrue(printer
+          .printBatch(java.util.List.of(
+              new io.artifexlabs.inventory.api.LabelPrinter.LabelRequest(item(), SCAN_URL, qrPng(), null),
+              new io.artifexlabs.inventory.api.LabelPrinter.LabelRequest(item(), SCAN_URL, qrPng(), null)))
           .toCompletableFuture().get());
       byte[] bytes = received.get();
       assertEquals(1, connections.get(), "the whole run must use ONE connection");
       assertEquals(0x1A, bytes[bytes.length - 1] & 0xFF, "only the last page ends the job");
       int escAt = 0;
       for (int i = 0; i + 1 < bytes.length; i++)
-        if ((bytes[i] & 0xFF) == 0x1B && (bytes[i + 1] & 0xFF) == 0x40) escAt++;
+        if ((bytes[i] & 0xFF) == 0x1B && (bytes[i + 1] & 0xFF) == 0x40)
+          escAt++;
       assertEquals(1, escAt, "ESC @ once per run — repeating it discarded buffered pages");
     }
   }
@@ -274,10 +275,9 @@ public class BrotherPTouchPrinterTest {
   }
 
   /** Records what a refusal told the user, so tests can assert BOTH faces. */
-  private final static class RecordingStatus
-      implements io.artifexlabs.inventory.api.events.StatusPublisher {
-    private final java.util.List<io.artifexlabs.inventory.api.events.StatusEvent> events =
-        java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+  private final static class RecordingStatus implements io.artifexlabs.inventory.api.events.StatusPublisher {
+    private final java.util.List<io.artifexlabs.inventory.api.events.StatusEvent> events = java.util.Collections
+        .synchronizedList(new java.util.ArrayList<>());
 
     @Override
     public void publish(io.artifexlabs.inventory.api.events.StatusEvent event) {
@@ -379,9 +379,10 @@ public class BrotherPTouchPrinterTest {
   public void aBatchHonoursPerRequestFormats() throws Exception {
     try (ServerSocket fake = new ServerSocket(0)) {
       BrotherPTouchPrinter printer = new BrotherPTouchPrinter("localhost", fake.getLocalPort(), 24);
-      byte[] bytes = capture(fake, printer.printBatch(java.util.List.of(
-          new io.artifexlabs.inventory.api.LabelPrinter.LabelRequest(item(), SCAN_URL, qrPng(), "qr-only"),
-          new io.artifexlabs.inventory.api.LabelPrinter.LabelRequest(item(), SCAN_URL, qrPng(), "qr-only"))));
+      byte[] bytes = capture(fake,
+          printer.printBatch(java.util.List.of(
+              new io.artifexlabs.inventory.api.LabelPrinter.LabelRequest(item(), SCAN_URL, qrPng(), "qr-only"),
+              new io.artifexlabs.inventory.api.LabelPrinter.LabelRequest(item(), SCAN_URL, qrPng(), "qr-only"))));
       assertEquals(0x1A, bytes[bytes.length - 1] & 0xFF);
       // two qr-only pages: the run carries exactly 2 x 120 raster lines
       assertEquals(240, rasterLines(bytes), "both pages rendered qr-only");

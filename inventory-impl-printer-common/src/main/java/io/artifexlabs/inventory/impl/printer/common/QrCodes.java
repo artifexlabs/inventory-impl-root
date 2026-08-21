@@ -27,9 +27,8 @@ import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 
 /**
- * ULID ids were chosen for compact QR codes; this renders them. Pure function,
- * no state. Lives in impl so the label worker renders where the printing
- * happens; the HTTP tier asks over the bus.
+ * ULID ids were chosen for compact QR codes; this renders them. Pure function, no state. Lives in impl so the label
+ * worker renders where the printing happens; the HTTP tier asks over the bus.
  */
 public final class QrCodes {
 
@@ -48,17 +47,14 @@ public final class QrCodes {
   }
 
   /**
-   * The bare module grid — margin 0, no scaling — for printers that render
-   * module-exact (ongoing item 11: the printed white tape supplies the quiet
-   * zone, worth 8 modules of width). {@code ecc} tunes robustness against
-   * payload size: L keeps a URL at version 3 (29 modules); a bare 26-char
-   * ULID is Crockford base32 and encodes ALPHANUMERIC, fitting version 2
-   * (25 modules) even at Q.
+   * The bare module grid — margin 0, no scaling — for printers that render module-exact (ongoing item 11: the printed
+   * white tape supplies the quiet zone, worth 8 modules of width). {@code ecc} tunes robustness against payload size: L
+   * keeps a URL at version 3 (29 modules); a bare 26-char ULID is Crockford base32 and encodes ALPHANUMERIC, fitting
+   * version 2 (25 modules) even at Q.
    */
   public static BitMatrix bareMatrix(String text, com.google.zxing.qrcode.decoder.ErrorCorrectionLevel ecc) {
     try {
-      var hints = new java.util.EnumMap<com.google.zxing.EncodeHintType, Object>(
-          com.google.zxing.EncodeHintType.class);
+      var hints = new java.util.EnumMap<com.google.zxing.EncodeHintType, Object>(com.google.zxing.EncodeHintType.class);
       hints.put(com.google.zxing.EncodeHintType.MARGIN, 0);
       hints.put(com.google.zxing.EncodeHintType.ERROR_CORRECTION, ecc);
       return new QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, 1, 1, hints);

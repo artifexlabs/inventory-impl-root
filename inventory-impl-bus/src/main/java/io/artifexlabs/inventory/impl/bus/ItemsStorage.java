@@ -28,10 +28,9 @@ import io.vertx.core.json.JsonArray;
 
 /** Item CRUD and containment over the bus. */
 /**
- * Items operations against the backing store (PLAN.md Phase 21, ask 2). These are
- * whole units of work, never composable row CRUD: a caller that had to
- * stitch two of them together would lose the transaction the backend
- * guarantees inside one.
+ * Items operations against the backing store (PLAN.md Phase 21, ask 2). These are whole units of work, never composable
+ * row CRUD: a caller that had to stitch two of them together would lose the transaction the backend guarantees inside
+ * one.
  */
 final class ItemsStorage {
 
@@ -42,8 +41,8 @@ final class ItemsStorage {
     reg.on(BusActions.ITEMS_LIST, env -> inventory.getAllItems().thenApply(ItemsStorage::serialize));
     reg.on(BusActions.ITEMS_LIST_OF_TYPE,
         env -> inventory.getItemsOfType(Envelopes.requireTarget(env)).thenApply(ItemsStorage::serialize));
-    reg.on(BusActions.ITEMS_GET, env -> inventory.getItem(Envelopes.requireTarget(env)).thenApply(o -> o.map(ItemFactory::serialize)
-        .orElseThrow(() -> BusServiceException.notFound("no such item"))));
+    reg.on(BusActions.ITEMS_GET, env -> inventory.getItem(Envelopes.requireTarget(env))
+        .thenApply(o -> o.map(ItemFactory::serialize).orElseThrow(() -> BusServiceException.notFound("no such item"))));
     reg.on(BusActions.ITEMS_CREATE, env -> {
       var creation = DefaultItemCreation.fromJson(env.data());
       return inventory.actingAs(env.principal()).createItem(creation.name(), creation.displayName(), creation.type())
@@ -56,14 +55,13 @@ final class ItemsStorage {
       return inventory.actingAs(env.principal()).updateItem(update.item())
           .thenApply(ok -> Envelopes.okOrNotFound(ok, "no such item", ItemFactory.serialize(update.item())));
     });
-    reg.on(BusActions.ITEMS_DELETE,
-        env -> inventory.actingAs(env.principal()).deleteItem(Envelopes.requireTarget(env)).thenApply(ok -> Envelopes.okOrNotFound(ok, "no such item", null)));
-    reg.on(BusActions.ITEMS_CONTAINER_OF,
-        env -> inventory.getContainer(Envelopes.requireTarget(env)).thenApply(o -> o.map(ItemFactory::serialize)
-            .orElseThrow(() -> BusServiceException.notFound("item is a root, or unknown"))));
+    reg.on(BusActions.ITEMS_DELETE, env -> inventory.actingAs(env.principal()).deleteItem(Envelopes.requireTarget(env))
+        .thenApply(ok -> Envelopes.okOrNotFound(ok, "no such item", null)));
+    reg.on(BusActions.ITEMS_CONTAINER_OF, env -> inventory.getContainer(Envelopes.requireTarget(env)).thenApply(o -> o
+        .map(ItemFactory::serialize).orElseThrow(() -> BusServiceException.notFound("item is a root, or unknown"))));
     reg.on(BusActions.ITEMS_COORDINATES, env -> inventory.effectiveCoordinates(Envelopes.requireTarget(env))
-        .thenApply(o -> o.map(c -> new io.vertx.core.json.JsonObject().put("latitude", c.latitude())
-            .put("longitude", c.longitude()))
+        .thenApply(o -> o
+            .map(c -> new io.vertx.core.json.JsonObject().put("latitude", c.latitude()).put("longitude", c.longitude()))
             .orElseThrow(() -> BusServiceException.notFound("nothing in the container chain is pinned"))));
     reg.on(BusActions.ITEMS_TAG, env -> {
       var tag = io.artifexlabs.inventory.api.ItemTag.fromJson(env.data());
@@ -94,8 +92,7 @@ final class ItemsStorage {
             if (unwrap(e) instanceof IllegalStateException conflict)
               throw BusServiceException.conflict(conflict.getMessage());
             throw sneaky(e);
-          })
-          .thenApply(ok -> Envelopes.okOrNotFound(ok, "no such item", null));
+          }).thenApply(ok -> Envelopes.okOrNotFound(ok, "no such item", null));
     });
     reg.on(BusActions.ITEMS_IDENTITY_REMOVE, env -> {
       var identity = parseIdentity(env.data());
@@ -104,13 +101,11 @@ final class ItemsStorage {
     });
     reg.on(BusActions.ITEMS_FIND_BY_IDENTITY, env -> {
       var identity = parseIdentity(env.data());
-      return inventory.findByIdentity(identity.kind(), identity.value())
-          .thenApply(o -> o.map(ItemFactory::serialize)
-              .orElseThrow(() -> BusServiceException.notFound("no item claims that identity")));
+      return inventory.findByIdentity(identity.kind(), identity.value()).thenApply(o -> o.map(ItemFactory::serialize)
+          .orElseThrow(() -> BusServiceException.notFound("no item claims that identity")));
     });
-    reg.on(BusActions.ITEMS_IDENTITIES_OF,
-        env -> inventory.identitiesOf(Envelopes.requireTarget(env)).thenApply(ids -> new JsonArray(
-            ids.stream().map(io.artifexlabs.inventory.api.ItemIdentity::toJson).toList())));
+    reg.on(BusActions.ITEMS_IDENTITIES_OF, env -> inventory.identitiesOf(Envelopes.requireTarget(env))
+        .thenApply(ids -> new JsonArray(ids.stream().map(io.artifexlabs.inventory.api.ItemIdentity::toJson).toList())));
     reg.on(BusActions.ITEMS_CONTAIN, env -> {
       var change = DefaultContainmentChange.fromJson(env.data());
       return inventory.actingAs(env.principal()).addToContainer(change.containerId(), change.itemId())
@@ -126,8 +121,7 @@ final class ItemsStorage {
       return inventory.actingAs(env.principal()).moveToContainer(change.itemId(), change.containerId())
           .thenApply(ok -> Envelopes.okOrNotFound(ok, "item or target container unknown", null));
     });
-    }
-
+  }
 
   private static Object serialize(List<Item> items) {
     return new JsonArray(items.stream().map(ItemFactory::serialize).toList());

@@ -29,9 +29,8 @@ import io.artifexlabs.inventory.api.events.StatusPublisher;
 import io.vertx.core.json.JsonObject;
 
 /**
- * The single admission checkpoint every worker runs before touching an
- * envelope: the fabric token must match (constant-time), the action must be
- * part of the vocabulary, and the envelope's asserted roles must include the
+ * The single admission checkpoint every worker runs before touching an envelope: the fabric token must match
+ * (constant-time), the action must be part of the vocabulary, and the envelope's asserted roles must include the
  * action's required role. Refusals are 400/401/403 before any work happens.
  */
 public final class BusGuard {
@@ -69,8 +68,8 @@ public final class BusGuard {
     if (!MessageDigest.isEqual(this.fabricToken, envelope.token().getBytes(StandardCharsets.UTF_8))) {
       // deliberately NOT reporting the presented token, nor an actor: a bad
       // fabric token means the caller is unauthenticated at the fabric level
-      this.status.publish(StatusEvent.error("bus.bad-fabric-token",
-          "A request was rejected because it did not carry a valid service token.")
+      this.status.publish(StatusEvent
+          .error("bus.bad-fabric-token", "A request was rejected because it did not carry a valid service token.")
           .source(SOURCE).subject("action", envelope.action())
           .detail("The event-bus fabric token did not match. This is a deployment/configuration fault "
               + "unless something is probing the bus."));
@@ -78,11 +77,10 @@ public final class BusGuard {
     }
     Optional<String> required = BusActions.requiredRole(envelope.action());
     if (required.isPresent() && !envelope.roles().contains(required.get())) {
-      this.status.publish(StatusEvent.warning("bus.forbidden",
-          "You do not have permission to perform that action.")
-          .source(SOURCE).subject("action", envelope.action()).subject("requiredRole", required.get())
-          .actor(envelope.userId())
-          .detail("Action " + envelope.action() + " requires the role " + required.get() + "."));
+      this.status.publish(
+          StatusEvent.warning("bus.forbidden", "You do not have permission to perform that action.").source(SOURCE)
+              .subject("action", envelope.action()).subject("requiredRole", required.get()).actor(envelope.userId())
+              .detail("Action " + envelope.action() + " requires the role " + required.get() + "."));
       throw BusServiceException.forbidden("action " + envelope.action() + " requires role " + required.get());
     }
     return envelope;

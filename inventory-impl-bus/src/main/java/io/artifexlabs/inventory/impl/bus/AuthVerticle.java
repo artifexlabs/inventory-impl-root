@@ -42,14 +42,13 @@ import io.vertx.core.json.JsonObject;
  * worker's configuration — the domain decides who may become a user.
  */
 /**
- * The public auth service: admission control and routing only; the login
- * and token operations happen in the storage layer (PLAN.md Phase 21, ask 2).
+ * The public auth service: admission control and routing only; the login and token operations happen in the storage
+ * layer (PLAN.md Phase 21, ask 2).
  */
 public class AuthVerticle extends ServiceVerticle {
 
   public AuthVerticle(BusGuard guard) {
     super(BusActions.addressOf(BusActions.AUTH_LOGIN), guard);
-    forward(BusActions.AUTH_LOGIN, BusActions.AUTH_TOKEN, BusActions.AUTH_REVOKE,
-        BusActions.AUTH_EXCHANGE);
+    forward(BusActions.AUTH_LOGIN, BusActions.AUTH_TOKEN, BusActions.AUTH_REVOKE, BusActions.AUTH_EXCHANGE);
   }
 }

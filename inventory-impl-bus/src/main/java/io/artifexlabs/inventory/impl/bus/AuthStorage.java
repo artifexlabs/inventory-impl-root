@@ -45,16 +45,16 @@ import io.vertx.core.json.JsonObject;
  * worker's configuration — the domain decides who may become a user.
  */
 /**
- * Authentication as storage domain operations (PLAN.md Phase 21, ask 2): a login
- * is one whole unit of work over users, tokens and the audit sink — exactly
- * the kind of thing that must NOT be composed from separate messages.
+ * Authentication as storage domain operations (PLAN.md Phase 21, ask 2): a login is one whole unit of work over users,
+ * tokens and the audit sink — exactly the kind of thing that must NOT be composed from separate messages.
  */
 final class AuthStorage {
 
   private AuthStorage() {
   }
 
-  static void register(StorageVerticle.Registrar reg, UserStore users, TokenService tokens, AuditSink audit, String provision) {
+  static void register(StorageVerticle.Registrar reg, UserStore users, TokenService tokens, AuditSink audit,
+      String provision) {
     reg.on(BusActions.AUTH_LOGIN, env -> {
       final DefaultCredentials credentials;
       try {
@@ -62,17 +62,15 @@ final class AuthStorage {
       } catch (IllegalArgumentException e) {
         throw BusServiceException.unauthorized("invalid credentials");
       }
-      return users.authenticate(credentials.email(), credentials.password())
-          .thenCompose(o -> o.map(u -> issue(tokens, u))
-              .orElseThrow(() -> BusServiceException.unauthorized("invalid credentials")));
+      return users.authenticate(credentials.email(), credentials.password()).thenCompose(
+          o -> o.map(u -> issue(tokens, u)).orElseThrow(() -> BusServiceException.unauthorized("invalid credentials")));
     });
     reg.on(BusActions.AUTH_TOKEN, env -> {
       String token = env.data().getString("token");
       if (token == null || token.isBlank())
         throw BusServiceException.unauthorized("missing bearer token");
-      return tokens.authenticate(token)
-          .thenApply(o -> o.map(u -> (Object) UserFactory.serialize(u))
-              .orElseThrow(() -> BusServiceException.unauthorized("unknown or revoked token")));
+      return tokens.authenticate(token).thenApply(o -> o.map(u -> (Object) UserFactory.serialize(u))
+          .orElseThrow(() -> BusServiceException.unauthorized("unknown or revoked token")));
     });
     reg.on(BusActions.AUTH_REVOKE, env -> {
       String token = env.data().getString("token", "");
@@ -92,13 +90,11 @@ final class AuthStorage {
           .thenCompose(known -> known.isPresent() ? issue(tokens, known.get())
               : byEmail(users, tokens, audit, provision, claim, true));
     });
-    }
-
+  }
 
   /**
-   * Email-keyed path of the exchange: link identity to a matching user, or
-   * provision per policy. Mirrors the pre-bus OidcExchangeResource behavior,
-   * identity winning over email when both are present.
+   * Email-keyed path of the exchange: link identity to a matching user, or provision per policy. Mirrors the pre-bus
+   * OidcExchangeResource behavior, identity winning over email when both are present.
    */
   private static CompletionStage<Object> byEmail(UserStore users, TokenService tokens, AuditSink audit,
       String provision, DefaultIdentityClaim claim, boolean withIdentity) {
@@ -109,11 +105,11 @@ final class AuthStorage {
         throw BusServiceException.forbidden("not invited: " + claim.email());
       // auto-provision with an unguessable password: the account is OIDC-only in practice
       return users.ensureUser(claim.email(), claim.displayName(), UUID.randomUUID().toString(), false)
-          .thenCompose(u -> link(users, audit, u, claim, withIdentity)
-              .thenCompose(x -> audit
+          .thenCompose(
+              u -> link(users, audit, u, claim, withIdentity).thenCompose(x -> audit
                   .record(new DefaultAuditEvent(Ulid.next(), Instant.now(), claim.email(), "user.create", u.getId(),
-                      new JsonObject().put("email", claim.email()).put("via", "oidc-auto-provision")
-                          .put("provider", claim.provider() == null ? "unknown" : claim.provider())))
+                      new JsonObject().put("email", claim.email()).put("via", "oidc-auto-provision").put("provider",
+                          claim.provider() == null ? "unknown" : claim.provider())))
                   .thenCompose(v -> issue(tokens, u))));
     });
   }
@@ -129,7 +125,6 @@ final class AuthStorage {
   }
 
   private static CompletionStage<Object> issue(TokenService tokens, InventoryUser user) {
-    return tokens.issue(user)
-        .thenApply(t -> new JsonObject().put("token", t).put("user", UserFactory.serialize(user)));
+    return tokens.issue(user).thenApply(t -> new JsonObject().put("token", t).put("user", UserFactory.serialize(user)));
   }
 }

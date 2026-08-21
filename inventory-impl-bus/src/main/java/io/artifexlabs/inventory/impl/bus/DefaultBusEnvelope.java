@@ -29,14 +29,11 @@ import io.vertx.core.json.JsonObject;
 /**
  * Concrete {@link BusEnvelope}; the wire shape both ends agree on.
  *
- * Immutable by construction: every field is final (record), the role set is
- * defensively copied, and the mutable {@link JsonObject} payload is deep-
- * copied at the boundaries — on construction, on {@link #data()} access, and
- * into {@link #toJson()} — so nothing holding a reference before or after the
- * envelope exists can alter what the envelope says. Within the fabric's trust
- * model (cluster membership is the only entry point), an admitted envelope's
- * identity and payload are therefore fixed for its lifetime. The extra copies
- * are an accepted cost of that guarantee.
+ * Immutable by construction: every field is final (record), the role set is defensively copied, and the mutable
+ * {@link JsonObject} payload is deep- copied at the boundaries — on construction, on {@link #data()} access, and into
+ * {@link #toJson()} — so nothing holding a reference before or after the envelope exists can alter what the envelope
+ * says. Within the fabric's trust model (cluster membership is the only entry point), an admitted envelope's identity
+ * and payload are therefore fixed for its lifetime. The extra copies are an accepted cost of that guarantee.
  */
 public record DefaultBusEnvelope(int version, String token, String userId, String principal, Set<String> roles,
     String action, Optional<String> targetId, JsonObject data) implements BusEnvelope {
@@ -77,7 +74,7 @@ public record DefaultBusEnvelope(int version, String token, String userId, Strin
     Set<String> roles = j.getJsonArray("roles", new JsonArray()).stream().map(String::valueOf)
         .collect(Collectors.toSet());
     return new DefaultBusEnvelope(j.getInteger("v", 0), j.getString("token"), j.getString("userId", ""),
-        j.getString("principal"), roles, j.getString("action"),
-        Optional.ofNullable(j.getString("targetId")), j.getJsonObject("data", new JsonObject()));
+        j.getString("principal"), roles, j.getString("action"), Optional.ofNullable(j.getString("targetId")),
+        j.getJsonObject("data", new JsonObject()));
   }
 }

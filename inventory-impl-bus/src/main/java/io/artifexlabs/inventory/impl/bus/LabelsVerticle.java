@@ -30,19 +30,18 @@ import io.artifexlabs.inventory.api.Ulid;
 import io.vertx.core.json.JsonObject;
 
 /**
- * QR rendering and physical label printing over the bus. The QR encodes a
- * scan URL the HTTP tier supplies ({@code data.url}) — public addressing is
- * the gateway's knowledge, not the worker's. Deploy as a worker verticle:
- * QR/AWT composition is CPU work. Prints audit as {@code label.print} with
- * the envelope's principal, matching the audit vocabulary.
+ * QR rendering and physical label printing over the bus. The QR encodes a scan URL the HTTP tier supplies
+ * ({@code data.url}) — public addressing is the gateway's knowledge, not the worker's. Deploy as a worker verticle:
+ * QR/AWT composition is CPU work. Prints audit as {@code label.print} with the envelope's principal, matching the audit
+ * vocabulary.
  */
 public class LabelsVerticle extends ServiceVerticle {
 
   private final static int DEFAULT_QR_PIXELS = 300;
 
   /** The item, from storage; storage raises 404 when it is unknown. */
-  private CompletionStage<io.artifexlabs.inventory.api.Item> item(
-      io.artifexlabs.inventory.api.bus.BusEnvelope env, String id) {
+  private CompletionStage<io.artifexlabs.inventory.api.Item> item(io.artifexlabs.inventory.api.bus.BusEnvelope env,
+      String id) {
     return storage(env, BusActions.ITEMS_GET, id, null)
         .thenApply(json -> io.artifexlabs.inventory.api.ItemFactory.deserialize((JsonObject) json));
   }
@@ -50,9 +49,8 @@ public class LabelsVerticle extends ServiceVerticle {
   /** Record an audit fact THROUGH storage — this verticle holds no sink. */
   private CompletionStage<Object> record(io.artifexlabs.inventory.api.bus.BusEnvelope env, String action,
       String targetId, JsonObject details) {
-    return storage(env, StorageVerticle.AUDIT_RECORD, targetId,
-        io.artifexlabs.inventory.api.AuditEventFactory.serialize(
-            new DefaultAuditEvent(Ulid.next(), Instant.now(), env.principal(), action, targetId, details)));
+    return storage(env, StorageVerticle.AUDIT_RECORD, targetId, io.artifexlabs.inventory.api.AuditEventFactory
+        .serialize(new DefaultAuditEvent(Ulid.next(), Instant.now(), env.principal(), action, targetId, details)));
   }
 
   /** Hand a packet to whichever printer verticle owns the address. */
@@ -90,17 +88,17 @@ public class LabelsVerticle extends ServiceVerticle {
       String format = env.data().getString("format"); // null = printer default
       String principal = env.principal();
       String actor = env.userId();
-      return item(env, id).thenCompose(item -> send(PrintPackets.PRINT, PrintPackets.attribute(
-          PrintPackets.label(item, url, format, QrCodes.png(url, DEFAULT_QR_PIXELS)), actor, null))
-              .thenCompose(ack -> record(env, "label.print", id,
-                      new JsonObject().put("accepted", accepted(ack)))
-                  .thenApply(v -> {
-                    // acceptance, not completion: TCP 9100 never told us more,
-                    // and the outcome arrives on status.events (PLAN.md Phase 21)
-                    if (!accepted(ack))
-                      throw BusServiceException.unavailable(reason(ack));
-                    return (Object) new JsonObject().put("accepted", true);
-                  })));
+      return item(env, id).thenCompose(item -> send(PrintPackets.PRINT,
+          PrintPackets.attribute(PrintPackets.label(item, url, format, QrCodes.png(url, DEFAULT_QR_PIXELS)), actor,
+              null))
+          .thenCompose(
+              ack -> record(env, "label.print", id, new JsonObject().put("accepted", accepted(ack))).thenApply(v -> {
+                // acceptance, not completion: TCP 9100 never told us more,
+                // and the outcome arrives on status.events (PLAN.md Phase 21)
+                if (!accepted(ack))
+                  throw BusServiceException.unavailable(reason(ack));
+                return (Object) new JsonObject().put("accepted", true);
+              })));
     });
     on(BusActions.LABELS_PRINT_BATCH, env -> {
       // ONE printer job for the whole run, so continuous tape spends a
@@ -119,8 +117,8 @@ public class LabelsVerticle extends ServiceVerticle {
       java.util.List<String> wanted = ids.stream().map(String::valueOf).toList();
 
       String actor = env.userId();
-      CompletionStage<java.util.List<JsonObject>> collected =
-          java.util.concurrent.CompletableFuture.completedStage(new java.util.ArrayList<>());
+      CompletionStage<java.util.List<JsonObject>> collected = java.util.concurrent.CompletableFuture
+          .completedStage(new java.util.ArrayList<>());
       for (String id : wanted) {
         String url = urls.getString(id);
         if (url == null || url.isBlank())
@@ -133,8 +131,7 @@ public class LabelsVerticle extends ServiceVerticle {
       return collected.thenCompose(labels -> send(PrintPackets.PRINT_BATCH,
           PrintPackets.attribute(PrintPackets.batch(labels, halfCut), actor, null))
           .thenCompose(ack -> record(env, "label.print-batch", "printer",
-                  new JsonObject().put("accepted", accepted(ack)).put("count", labels.size())
-                      .put("halfCut", halfCut))
+              new JsonObject().put("accepted", accepted(ack)).put("count", labels.size()).put("halfCut", halfCut))
               .thenApply(v -> {
                 if (!accepted(ack))
                   throw BusServiceException.unavailable(reason(ack));
@@ -143,14 +140,12 @@ public class LabelsVerticle extends ServiceVerticle {
     });
     on(BusActions.LABELS_FEED, env -> {
       String principal = env.principal();
-      return send(PrintPackets.FEED, PrintPackets.attribute(new JsonObject(), env.userId(), null))
-          .thenCompose(ack -> record(env, "label.feed", "printer",
-                  new JsonObject().put("accepted", accepted(ack)))
-              .thenApply(v -> {
-                if (!accepted(ack))
-                  throw BusServiceException.unavailable(reason(ack));
-                return (Object) new JsonObject().put("accepted", true);
-              }));
+      return send(PrintPackets.FEED, PrintPackets.attribute(new JsonObject(), env.userId(), null)).thenCompose(
+          ack -> record(env, "label.feed", "printer", new JsonObject().put("accepted", accepted(ack))).thenApply(v -> {
+            if (!accepted(ack))
+              throw BusServiceException.unavailable(reason(ack));
+            return (Object) new JsonObject().put("accepted", true);
+          }));
     });
   }
 

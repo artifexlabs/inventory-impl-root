@@ -37,24 +37,19 @@ import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonObject;
 
 /**
- * The printer as a bus participant (PLAN.md Phase 21, ask 1): callers send a
- * {@link PrintPackets} packet to {@code printer.*} instead of holding a
- * {@link LabelPrinter} reference, which is what lets a printer live in a
- * different process — or eventually on a print-station node — without any
- * caller knowing.
+ * The printer as a bus participant (PLAN.md Phase 21, ask 1): callers send a {@link PrintPackets} packet to
+ * {@code printer.*} instead of holding a {@link LabelPrinter} reference, which is what lets a printer live in a
+ * different process — or eventually on a print-station node — without any caller knowing.
  *
  * <p>
- * <b>Replies are ACCEPTANCE, not completion.</b> The packet is validated and
- * queued, the sender is released immediately, and the outcome follows as a
- * {@link StatusEvent}: {@code printer.printed} on success, and whatever
- * refusal the driver already publishes on failure. This is the honest
- * contract for a unidirectional TCP-9100 printer — completion was never
- * observable — and it keeps an HTTP request from waiting on hardware.
+ * <b>Replies are ACCEPTANCE, not completion.</b> The packet is validated and queued, the sender is released
+ * immediately, and the outcome follows as a {@link StatusEvent}: {@code printer.printed} on success, and whatever
+ * refusal the driver already publishes on failure. This is the honest contract for a unidirectional TCP-9100 printer —
+ * completion was never observable — and it keeps an HTTP request from waiting on hardware.
  *
  * <p>
- * This class is vendor-agnostic: the vendor lives in the injected
- * {@link LabelPrinter}, which is where the Brother/Zebra difference already
- * was. One verticle per deployed printer.
+ * This class is vendor-agnostic: the vendor lives in the injected {@link LabelPrinter}, which is where the
+ * Brother/Zebra difference already was. One verticle per deployed printer.
  */
 public class LabelPrinterVerticle extends AbstractVerticle {
   private final static org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(LabelPrinterVerticle.class);
@@ -68,12 +63,12 @@ public class LabelPrinterVerticle extends AbstractVerticle {
   }
 
   /**
-   * {@code lookup} backs the by-reference escape hatch — a packet carrying
-   * only an item id. Null means this printer accepts self-contained packets
-   * only, which is the deployable-anywhere case.
+   * {@code lookup} backs the by-reference escape hatch — a packet carrying only an item id. Null means this printer
+   * accepts self-contained packets only, which is the deployable-anywhere case.
    */
   public LabelPrinterVerticle(LabelPrinter printer, StatusPublisher status,
-      Function<String, CompletionStage<Optional<Item>>> lookup) {
+      Function<String, CompletionStage<Optional<Item>>> lookup)
+  {
     this.printer = requireNonNull(printer, "printer");
     this.status = status == null ? StatusPublisher.NOOP : status;
     this.lookup = lookup;
@@ -117,8 +112,8 @@ public class LabelPrinterVerticle extends AbstractVerticle {
     String actor = PrintPackets.actorOf(packet).orElse(null);
     String correlation = PrintPackets.correlationOf(packet).orElse(null);
 
-    CompletionStage<List<LabelPrinter.LabelRequest>> collected =
-        java.util.concurrent.CompletableFuture.completedStage(new ArrayList<>());
+    CompletionStage<List<LabelPrinter.LabelRequest>> collected = java.util.concurrent.CompletableFuture
+        .completedStage(new ArrayList<>());
     for (JsonObject label : labels)
       collected = collected.thenCompose(acc -> resolve(PrintPackets.readLabel(label)).thenApply(r -> {
         acc.add(r);
@@ -142,8 +137,8 @@ public class LabelPrinterVerticle extends AbstractVerticle {
     String actor = packet == null ? null : PrintPackets.actorOf(packet).orElse(null);
     this.printer.feed().whenComplete((fed, thrown) -> {
       if (thrown == null && Boolean.TRUE.equals(fed))
-        this.status.publish(StatusEvent.info("printer.fed", "The tape was fed and cut.")
-            .source("printer").actor(actor));
+        this.status
+            .publish(StatusEvent.info("printer.fed", "The tape was fed and cut.").source("printer").actor(actor));
       // failures already publish their own event from the driver
     });
   }
@@ -154,33 +149,32 @@ public class LabelPrinterVerticle extends AbstractVerticle {
       return java.util.concurrent.CompletableFuture.completedStage(
           new LabelPrinter.LabelRequest(packet.item(), packet.scanUrl(), packet.qrPng(), packet.format()));
     if (this.lookup == null || packet.itemId() == null)
-      return java.util.concurrent.CompletableFuture.failedStage(
-          new IllegalArgumentException("packet carries no item and this printer cannot resolve one"));
+      return java.util.concurrent.CompletableFuture
+          .failedStage(new IllegalArgumentException("packet carries no item and this printer cannot resolve one"));
     return this.lookup.apply(packet.itemId())
         .thenApply(found -> new LabelPrinter.LabelRequest(
-            found.orElseThrow(() -> new IllegalArgumentException("no such item: " + packet.itemId())),
-            packet.scanUrl(), packet.qrPng(), packet.format()));
+            found.orElseThrow(() -> new IllegalArgumentException("no such item: " + packet.itemId())), packet.scanUrl(),
+            packet.qrPng(), packet.format()));
   }
 
   /**
-   * The outcome, after the fact. Success is announced here; every failure
-   * mode already publishes its own specific refusal from the driver, so this
-   * only backstops the ones that arrive as a bare false or an exception.
+   * The outcome, after the fact. Success is announced here; every failure mode already publishes its own specific
+   * refusal from the driver, so this only backstops the ones that arrive as a bare false or an exception.
    */
   private void report(Boolean printed, Throwable thrown, String subjectId, int count, String actor,
       String correlation) {
     if (thrown == null && Boolean.TRUE.equals(printed)) {
-      this.status.publish(StatusEvent.info("printer.printed",
-          count == 1 ? "The label was sent to the printer." : "The label run was sent to the printer.")
-          .source("printer").subject("itemId", subjectId).subject("count", String.valueOf(count))
-          .actor(actor).correlationId(correlation));
+      this.status.publish(StatusEvent
+          .info("printer.printed",
+              count == 1 ? "The label was sent to the printer." : "The label run was sent to the printer.")
+          .source("printer").subject("itemId", subjectId).subject("count", String.valueOf(count)).actor(actor)
+          .correlationId(correlation));
       return;
     }
     log.warn("print did not succeed for {} ({} labels): {}", subjectId, count,
         thrown == null ? "refused" : thrown.toString());
     if (thrown != null)
-      this.status.publish(StatusEvent.error("printer.print-failed", "The label could not be printed.")
-          .source("printer").subject("itemId", subjectId).actor(actor).correlationId(correlation)
-          .detail(thrown.toString()));
+      this.status.publish(StatusEvent.error("printer.print-failed", "The label could not be printed.").source("printer")
+          .subject("itemId", subjectId).actor(actor).correlationId(correlation).detail(thrown.toString()));
   }
 }

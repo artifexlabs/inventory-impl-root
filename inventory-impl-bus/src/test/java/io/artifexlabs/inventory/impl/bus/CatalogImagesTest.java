@@ -31,9 +31,8 @@ import org.junit.jupiter.api.Test;
 import com.sun.net.httpserver.HttpServer;
 
 /**
- * Catalog image fetching is best-effort by design: a product photo that
- * cannot be retrieved must never fail the item it was decorating. Moved here
- * with CatalogImages when the bus layer became its own module (PLAN.md Phase 21).
+ * Catalog image fetching is best-effort by design: a product photo that cannot be retrieved must never fail the item it
+ * was decorating. Moved here with CatalogImages when the bus layer became its own module (PLAN.md Phase 21).
  */
 public class CatalogImagesTest {
 
@@ -44,7 +43,9 @@ public class CatalogImagesTest {
   public static void serve() throws Exception {
     stub = HttpServer.create(new InetSocketAddress(0), 0);
     stub.createContext("/image.jpg", exchange -> {
-      byte[] body = new byte[] {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0};
+      byte[] body = new byte[] {
+          (byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0
+      };
       exchange.getResponseHeaders().add("Content-Type", "image/jpeg");
       exchange.sendResponseHeaders(200, body.length);
       try (OutputStream out = exchange.getResponseBody()) {

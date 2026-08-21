@@ -22,12 +22,10 @@ import java.util.Optional;
 import io.artifexlabs.inventory.api.LatLong;
 
 /**
- * Minimal GPS-tag EXIF parser: JPEG APP1 → TIFF header → IFD0 → GPS IFD →
- * lat/long rationals. Deliberately dependency-free and reflection-free (native
- * image stays clean — the alternative, metadata-extractor, was passed over for
- * exactly that reason, per PLAN Phase 8). JPEG only; best-effort by design —
- * any structural surprise returns empty, never throws. Mobile clients pass
- * coordinates explicitly and don't depend on this surviving.
+ * Minimal GPS-tag EXIF parser: JPEG APP1 → TIFF header → IFD0 → GPS IFD → lat/long rationals. Deliberately
+ * dependency-free and reflection-free (native image stays clean — the alternative, metadata-extractor, was passed over
+ * for exactly that reason, per PLAN Phase 8). JPEG only; best-effort by design — any structural surprise returns empty,
+ * never throws. Mobile clients pass coordinates explicitly and don't depend on this surviving.
  *
  * @author mykel
  *

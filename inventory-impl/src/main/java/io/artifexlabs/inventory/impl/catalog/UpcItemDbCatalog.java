@@ -36,11 +36,9 @@ import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 
 /**
- * UPCitemdb's free trial tier (keyless, ~100 lookups/day): the
- * general-merchandise fallback behind the open-data sources. A 429 (daily
- * limit) — like every other failure — degrades to a miss and the composite
- * moves on. Commercial as-is data; the {@code source=} tag links its stable
- * product page.
+ * UPCitemdb's free trial tier (keyless, ~100 lookups/day): the general-merchandise fallback behind the open-data
+ * sources. A 429 (daily limit) — like every other failure — degrades to a miss and the composite moves on. Commercial
+ * as-is data; the {@code source=} tag links its stable product page.
  */
 public class UpcItemDbCatalog implements UpcCatalog {
   private final static Logger log = LoggerFactory.getLogger(UpcItemDbCatalog.class);
@@ -67,8 +65,7 @@ public class UpcItemDbCatalog implements UpcCatalog {
             return Optional.empty();
           }
           return response.statusCode() == 200 ? parse(gtin13, response.body()) : Optional.empty();
-        })
-        .exceptionally(e -> {
+        }).exceptionally(e -> {
           log.debug("UPCitemdb lookup failed for {}: {}", gtin13, e.toString());
           return Optional.empty();
         });
@@ -85,14 +82,11 @@ public class UpcItemDbCatalog implements UpcCatalog {
       if (name == null)
         return Optional.empty();
       JsonArray images = item.getJsonArray("images", new JsonArray());
-      return Optional.of(new CatalogEntry(gtin13, name,
-          OpenFactsCatalog.blankToNull(item.getString("brand")),
-          OpenFactsCatalog.blankToNull(item.getString("description")),
-          leafCategory(item.getString("category")),
+      return Optional.of(new CatalogEntry(gtin13, name, OpenFactsCatalog.blankToNull(item.getString("brand")),
+          OpenFactsCatalog.blankToNull(item.getString("description")), leafCategory(item.getString("category")),
           weightGrams(item.getString("weight")),
           images.isEmpty() ? null : OpenFactsCatalog.blankToNull(images.getString(0)),
-          "https://www.upcitemdb.com/upc/" + gtin13,
-          "upcitemdb.com"));
+          "https://www.upcitemdb.com/upc/" + gtin13, "upcitemdb.com"));
     } catch (RuntimeException e) {
       return Optional.empty();
     }

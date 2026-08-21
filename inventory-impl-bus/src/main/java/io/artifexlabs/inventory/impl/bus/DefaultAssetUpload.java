@@ -37,7 +37,8 @@ public record DefaultAssetUpload(String itemId, String filename, String contentT
 
   /** Default-kind upload. */
   public DefaultAssetUpload(String itemId, String filename, String contentType, byte[] bytes,
-      Optional<LatLong> coordinates) {
+      Optional<LatLong> coordinates)
+  {
     this(itemId, filename, contentType, bytes, coordinates, null);
   }
 

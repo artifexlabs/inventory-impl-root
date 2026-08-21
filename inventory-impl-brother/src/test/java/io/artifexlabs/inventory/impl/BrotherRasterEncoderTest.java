@@ -44,8 +44,12 @@ public class BrotherRasterEncoderTest {
   private static byte[] preamble(int lines, int tapeMm) {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     out.writeBytes(new byte[100]);
-    out.writeBytes(new byte[] { 0x1B, 0x40 });
-    out.writeBytes(new byte[] { 0x1B, 0x69, 0x61, 0x01 });
+    out.writeBytes(new byte[] {
+        0x1B, 0x40
+    });
+    out.writeBytes(new byte[] {
+        0x1B, 0x69, 0x61, 0x01
+    });
     out.writeBytes(pageInfo(lines, tapeMm, false));
     return out.toByteArray();
   }
@@ -53,12 +57,22 @@ public class BrotherRasterEncoderTest {
   /** Per-page header; continuation sets the "not the starting page" flag. */
   private static byte[] pageInfo(int lines, int tapeMm, boolean continuation) {
     ByteArrayOutputStream out = new ByteArrayOutputStream();
-    out.writeBytes(new byte[] { 0x1B, 0x69, 0x7A, 0x06, 0x01, (byte) tapeMm, 0x00, (byte) lines, 0x00,
-        0x00, 0x00, (byte) (continuation ? 0x01 : 0x00), 0x00 });
-    out.writeBytes(new byte[] { 0x1B, 0x69, 0x4D, 0x40 });
-    out.writeBytes(new byte[] { 0x1B, 0x69, 0x4B, 0x08 });
-    out.writeBytes(new byte[] { 0x1B, 0x69, 0x64, 0x0E, 0x00 });
-    out.writeBytes(new byte[] { 0x4D, 0x00 });
+    out.writeBytes(new byte[] {
+        0x1B, 0x69, 0x7A, 0x06, 0x01, (byte) tapeMm, 0x00, (byte) lines, 0x00, 0x00, 0x00,
+        (byte) (continuation ? 0x01 : 0x00), 0x00
+    });
+    out.writeBytes(new byte[] {
+        0x1B, 0x69, 0x4D, 0x40
+    });
+    out.writeBytes(new byte[] {
+        0x1B, 0x69, 0x4B, 0x08
+    });
+    out.writeBytes(new byte[] {
+        0x1B, 0x69, 0x64, 0x0E, 0x00
+    });
+    out.writeBytes(new byte[] {
+        0x4D, 0x00
+    });
     return out.toByteArray();
   }
 
@@ -69,16 +83,18 @@ public class BrotherRasterEncoderTest {
 
     ByteArrayOutputStream expected = new ByteArrayOutputStream();
     expected.writeBytes(preamble(3, 24));
-    expected.writeBytes(new byte[] { 0x5A, 0x5A, 0x5A, 0x1A });
+    expected.writeBytes(new byte[] {
+        0x5A, 0x5A, 0x5A, 0x1A
+    });
     assertArrayEquals(expected.toByteArray(), encoded);
   }
 
   @Test
   public void blackPixelsSetTheRightPinBits() {
     BufferedImage img = image(2, 128);
-    img.setRGB(0, 0, 0x000000);    // column 0, top pin -> byte 0, bit 0x80
-    img.setRGB(0, 127, 0x000000);  // column 0, bottom pin -> byte 15, bit 0x01
-    img.setRGB(1, 9, 0x000000);    // column 1, pin 9 -> byte 1, bit 0x40
+    img.setRGB(0, 0, 0x000000); // column 0, top pin -> byte 0, bit 0x80
+    img.setRGB(0, 127, 0x000000); // column 0, bottom pin -> byte 15, bit 0x01
+    img.setRGB(1, 9, 0x000000); // column 1, pin 9 -> byte 1, bit 0x40
 
     byte[] encoded = this.encoder.encode(img, 24);
 
@@ -90,9 +106,13 @@ public class BrotherRasterEncoderTest {
 
     ByteArrayOutputStream expected = new ByteArrayOutputStream();
     expected.writeBytes(preamble(2, 24));
-    expected.writeBytes(new byte[] { 0x47, 0x10, 0x00 });
+    expected.writeBytes(new byte[] {
+        0x47, 0x10, 0x00
+    });
     expected.writeBytes(line0);
-    expected.writeBytes(new byte[] { 0x47, 0x10, 0x00 });
+    expected.writeBytes(new byte[] {
+        0x47, 0x10, 0x00
+    });
     expected.writeBytes(line1);
     expected.write(0x1A);
     assertArrayEquals(expected.toByteArray(), encoded);
@@ -101,7 +121,7 @@ public class BrotherRasterEncoderTest {
   @Test
   public void narrowTapeIsCenteredAcrossTheHead() {
     BufferedImage img = image(1, 70); // 12mm tape: 70 dots, offset (128-70)/2 = 29
-    img.setRGB(0, 0, 0x000000);       // top of the 70 -> pin 29 -> byte 3, bit 7-(29%8)=0x04
+    img.setRGB(0, 0, 0x000000); // top of the 70 -> pin 29 -> byte 3, bit 7-(29%8)=0x04
     byte[] encoded = this.encoder.encode(img, 12);
     // find the raster line: preamble length then 'G'
     int at = preamble(1, 12).length;
@@ -121,14 +141,24 @@ public class BrotherRasterEncoderTest {
     byte[] encoded = this.encoder.encodeBatch(java.util.List.of(image(2, 128), image(3, 128)), 24);
 
     ByteArrayOutputStream expected = new ByteArrayOutputStream();
-    expected.writeBytes(new byte[100]);                       // invalidate ONCE
-    expected.writeBytes(new byte[] { 0x1B, 0x40 });           // initialize ONCE
-    expected.writeBytes(new byte[] { 0x1B, 0x69, 0x61, 0x01 });
-    expected.writeBytes(new byte[] { 0x1B, 0x69, 0x41, 0x02 }); // cut once per 2-label run
-    expected.writeBytes(pageInfo(2, 24, false));              // page 1: starting page
-    expected.writeBytes(new byte[] { 0x5A, 0x5A, 0x0C });     // ...more pages follow
-    expected.writeBytes(pageInfo(3, 24, true));               // page 2: continuation flag
-    expected.writeBytes(new byte[] { 0x5A, 0x5A, 0x5A, 0x1A }); // ...run complete
+    expected.writeBytes(new byte[100]); // invalidate ONCE
+    expected.writeBytes(new byte[] {
+        0x1B, 0x40
+    }); // initialize ONCE
+    expected.writeBytes(new byte[] {
+        0x1B, 0x69, 0x61, 0x01
+    });
+    expected.writeBytes(new byte[] {
+        0x1B, 0x69, 0x41, 0x02
+    }); // cut once per 2-label run
+    expected.writeBytes(pageInfo(2, 24, false)); // page 1: starting page
+    expected.writeBytes(new byte[] {
+        0x5A, 0x5A, 0x0C
+    }); // ...more pages follow
+    expected.writeBytes(pageInfo(3, 24, true)); // page 2: continuation flag
+    expected.writeBytes(new byte[] {
+        0x5A, 0x5A, 0x5A, 0x1A
+    }); // ...run complete
     assertArrayEquals(expected.toByteArray(), encoded);
   }
 
@@ -148,8 +178,7 @@ public class BrotherRasterEncoderTest {
   public void aMultiLabelRunTakesItsFullCutOnlyAtTheEnd() {
     // ESC i A defaults to 1 = "cut each label", which would sever every page
     // and give back the leader saving; the run length moves it to the end
-    byte[] three = this.encoder.encodeBatch(
-        java.util.List.of(image(1, 128), image(1, 128), image(1, 128)), 24, true);
+    byte[] three = this.encoder.encodeBatch(java.util.List.of(image(1, 128), image(1, 128), image(1, 128)), 24, true);
     assertEquals(3, cutEachPages(three), "ESC i A must carry the run length");
     // a single label keeps the default and sends no ESC i A at all
     assertEquals(-1, cutEachPages(this.encoder.encodeBatch(java.util.List.of(image(1, 128)), 24, true)));
@@ -174,8 +203,7 @@ public class BrotherRasterEncoderTest {
   @Test
   public void theInitializeSequenceAppearsExactlyOncePerBatch() {
     // repeating ESC @ mid-run is precisely what discarded buffered pages
-    byte[] encoded = this.encoder.encodeBatch(
-        java.util.List.of(image(1, 128), image(1, 128), image(1, 128)), 24);
+    byte[] encoded = this.encoder.encodeBatch(java.util.List.of(image(1, 128), image(1, 128), image(1, 128)), 24);
     int occurrences = 0;
     for (int i = 0; i + 1 < encoded.length; i++)
       if ((encoded[i] & 0xFF) == 0x1B && (encoded[i + 1] & 0xFF) == 0x40)

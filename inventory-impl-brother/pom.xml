@@ -18,19 +18,23 @@
     @formatter:on
 
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
+
   <parent>
     <groupId>io.artifexlabs.inventory</groupId>
     <artifactId>inventory-impl-root</artifactId>
     <version>0.1.0-SNAPSHOT</version>
   </parent>
+
   <artifactId>inventory-impl-brother</artifactId>
+
   <name>${project.artifactId}</name>
   <description>The Brother PT-P750W label printer: raster-protocol encoder and
     the tape-width-aware format mappings (standard/standard-qr = 12 mm,
     large = 24 mm, tiny = 9 mm, qr-only = any). Depends on core for the
     module-exact QR rendering (QrCodes).</description>
+
   <dependencies>
     <dependency>
       <groupId>io.artifexlabs.inventory</groupId>

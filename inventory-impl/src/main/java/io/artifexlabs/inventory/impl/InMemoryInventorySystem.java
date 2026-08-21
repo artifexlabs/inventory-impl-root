@@ -44,13 +44,12 @@ import io.artifexlabs.inventory.api.TagQuery;
 import io.vertx.core.json.JsonObject;
 
 /**
- * A complete in-memory {@link InventorySystem}. The default backend for dev and
- * test profiles; every mutation is recorded to the supplied {@link AuditSink}.
+ * A complete in-memory {@link InventorySystem}. The default backend for dev and test profiles; every mutation is
+ * recorded to the supplied {@link AuditSink}.
  *
- * Containment is stored the way the database stores it (Phase 15): each item
- * holds its single {@code containerId}, and an item's contents are DERIVED by
- * looking for children. Nothing is nested in storage, so a move is one field
- * write and can never leave the same child in two places.
+ * Containment is stored the way the database stores it (Phase 15): each item holds its single {@code containerId}, and
+ * an item's contents are DERIVED by looking for children. Nothing is nested in storage, so a move is one field write
+ * and can never leave the same child in two places.
  *
  * @author mykel
  *
@@ -69,7 +68,8 @@ public class InMemoryInventorySystem implements InventorySystem {
   /** View constructor: shares the store, differs only in attribution. */
   private InMemoryInventorySystem(ConcurrentHashMap<String, Item> items,
       ConcurrentHashMap<io.artifexlabs.inventory.api.ItemIdentity, String> identities, AuditSink auditSink,
-      String principal) {
+      String principal)
+  {
     this.items = items;
     this.identities = identities;
     this.auditSink = requireNonNull(auditSink, "auditSink");
@@ -104,8 +104,8 @@ public class InMemoryInventorySystem implements InventorySystem {
 
   @Override
   public CompletionStage<List<Item>> getItemsOfType(String type) {
-    return CompletableFuture.completedStage(
-        this.items.values().stream().filter(i -> i.getType().equals(type)).map(this::hydrate).toList());
+    return CompletableFuture
+        .completedStage(this.items.values().stream().filter(i -> i.getType().equals(type)).map(this::hydrate).toList());
   }
 
   @Override
@@ -150,8 +150,8 @@ public class InMemoryInventorySystem implements InventorySystem {
   @Override
   public CompletionStage<Optional<Item>> getContainer(String itemId) {
     Item item = this.items.get(itemId);
-    return CompletableFuture.completedStage(item == null ? Optional.empty()
-        : item.getContainerId().map(this.items::get).map(this::hydrate));
+    return CompletableFuture.completedStage(
+        item == null ? Optional.empty() : item.getContainerId().map(this.items::get).map(this::hydrate));
   }
 
   @Override
@@ -268,8 +268,8 @@ public class InMemoryInventorySystem implements InventorySystem {
 
   @Override
   public CompletionStage<List<io.artifexlabs.inventory.api.ItemIdentity>> identitiesOf(String itemId) {
-    return CompletableFuture.completedStage(this.identities.entrySet().stream()
-        .filter(e -> e.getValue().equals(itemId)).map(java.util.Map.Entry::getKey).sorted().toList());
+    return CompletableFuture.completedStage(this.identities.entrySet().stream().filter(e -> e.getValue().equals(itemId))
+        .map(java.util.Map.Entry::getKey).sorted().toList());
   }
 
   private CompletionStage<Void> audit(String action, Item target) {

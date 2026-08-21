@@ -34,17 +34,13 @@ import io.vertx.core.json.JsonObject;
  * self-delete refusal keys on the envelope's acting userId.
  */
 /**
- * The public users service: admission control and routing only. Every
- * operation is performed by the storage layer behind {@code storage} —
- * this verticle holds no backend reference at all (PLAN.md Phase 21, ask 2).
+ * The public users service: admission control and routing only. Every operation is performed by the storage layer
+ * behind {@code storage} — this verticle holds no backend reference at all (PLAN.md Phase 21, ask 2).
  */
 public class UsersVerticle extends ServiceVerticle {
 
   public UsersVerticle(BusGuard guard) {
     super(BusActions.addressOf(BusActions.USERS_LIST), guard);
-    forward(BusActions.USERS_LIST,
-        BusActions.USERS_CREATE,
-        BusActions.USERS_DELETE,
-        BusActions.USERS_SET_ADMIN);
+    forward(BusActions.USERS_LIST, BusActions.USERS_CREATE, BusActions.USERS_DELETE, BusActions.USERS_SET_ADMIN);
   }
 }

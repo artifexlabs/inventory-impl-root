@@ -25,8 +25,8 @@ import io.artifexlabs.inventory.api.bus.AssetContent;
 import io.vertx.core.json.JsonObject;
 
 /** Concrete {@link AssetContent}: the bytes of a replacement, and what they are. */
-public record DefaultAssetContent(String filename, String contentType, byte[] bytes,
-    Optional<LatLong> coordinates) implements AssetContent {
+public record DefaultAssetContent(String filename, String contentType, byte[] bytes, Optional<LatLong> coordinates)
+    implements AssetContent {
 
   public DefaultAssetContent {
     bytes = bytes == null ? new byte[0] : bytes;
@@ -35,8 +35,8 @@ public record DefaultAssetContent(String filename, String contentType, byte[] by
 
   @Override
   public JsonObject toJson() {
-    JsonObject j = new JsonObject().put("filename", this.filename).put("contentType", this.contentType)
-        .put("bytes", this.bytes);
+    JsonObject j = new JsonObject().put("filename", this.filename).put("contentType", this.contentType).put("bytes",
+        this.bytes);
     this.coordinates.ifPresent(c -> j.put("latitude", c.latitude()).put("longitude", c.longitude()));
     return j;
   }
@@ -45,7 +45,6 @@ public record DefaultAssetContent(String filename, String contentType, byte[] by
     Optional<LatLong> coords = j.containsKey("latitude") && j.containsKey("longitude")
         ? Optional.of(new LatLong(j.getDouble("latitude"), j.getDouble("longitude")))
         : Optional.empty();
-    return new DefaultAssetContent(j.getString("filename"), j.getString("contentType"), j.getBinary("bytes"),
-        coords);
+    return new DefaultAssetContent(j.getString("filename"), j.getString("contentType"), j.getBinary("bytes"), coords);
   }
 }

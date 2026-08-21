@@ -27,31 +27,17 @@ import io.vertx.core.json.JsonArray;
 
 /** Item CRUD and containment over the bus. */
 /**
- * The public items service: admission control and routing only. Every
- * operation is performed by the storage layer behind {@code storage} —
- * this verticle holds no backend reference at all (PLAN.md Phase 21, ask 2).
+ * The public items service: admission control and routing only. Every operation is performed by the storage layer
+ * behind {@code storage} — this verticle holds no backend reference at all (PLAN.md Phase 21, ask 2).
  */
 public class ItemsVerticle extends ServiceVerticle {
 
   public ItemsVerticle(BusGuard guard) {
     super(BusActions.addressOf(BusActions.ITEMS_LIST), guard);
-    forward(BusActions.ITEMS_LIST,
-        BusActions.ITEMS_LIST_OF_TYPE,
-        BusActions.ITEMS_GET,
-        BusActions.ITEMS_CREATE,
-        BusActions.ITEMS_UPDATE,
-        BusActions.ITEMS_DELETE,
-        BusActions.ITEMS_CONTAINER_OF,
-        BusActions.ITEMS_COORDINATES,
-        BusActions.ITEMS_TAG,
-        BusActions.ITEMS_UNTAG,
-        BusActions.ITEMS_FIND_BY_TAG,
-        BusActions.ITEMS_IDENTITY_ADD,
-        BusActions.ITEMS_IDENTITY_REMOVE,
-        BusActions.ITEMS_FIND_BY_IDENTITY,
-        BusActions.ITEMS_IDENTITIES_OF,
-        BusActions.ITEMS_CONTAIN,
-        BusActions.ITEMS_UNCONTAIN,
-        BusActions.ITEMS_MOVE);
+    forward(BusActions.ITEMS_LIST, BusActions.ITEMS_LIST_OF_TYPE, BusActions.ITEMS_GET, BusActions.ITEMS_CREATE,
+        BusActions.ITEMS_UPDATE, BusActions.ITEMS_DELETE, BusActions.ITEMS_CONTAINER_OF, BusActions.ITEMS_COORDINATES,
+        BusActions.ITEMS_TAG, BusActions.ITEMS_UNTAG, BusActions.ITEMS_FIND_BY_TAG, BusActions.ITEMS_IDENTITY_ADD,
+        BusActions.ITEMS_IDENTITY_REMOVE, BusActions.ITEMS_FIND_BY_IDENTITY, BusActions.ITEMS_IDENTITIES_OF,
+        BusActions.ITEMS_CONTAIN, BusActions.ITEMS_UNCONTAIN, BusActions.ITEMS_MOVE);
   }
 }

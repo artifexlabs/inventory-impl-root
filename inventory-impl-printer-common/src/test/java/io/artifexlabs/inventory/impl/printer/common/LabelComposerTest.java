@@ -33,10 +33,9 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
 /**
- * Platform-neutral invariants everywhere; the exact golden-file comparison is
- * Linux-only (the devcontainer/CI/production fonts — DejaVu — differ from
- * macOS glyphs). Regenerate the golden INSIDE the devcontainer with:
- *   mvn -pl inventory-impl test -Dtest=LabelComposerTest -Dlabel.golden.update=true
+ * Platform-neutral invariants everywhere; the exact golden-file comparison is Linux-only (the
+ * devcontainer/CI/production fonts — DejaVu — differ from macOS glyphs). Regenerate the golden INSIDE the devcontainer
+ * with: mvn -pl inventory-impl test -Dtest=LabelComposerTest -Dlabel.golden.update=true
  */
 public class LabelComposerTest {
 
@@ -61,8 +60,7 @@ public class LabelComposerTest {
   public void geometryAndQrRegionAreExact() {
     // the QR arrives module-exact (8 modules × 16 dots) and is drawn at its
     // NATURAL size — the composer must never rescale it (ongoing item 11)
-    BufferedImage label = this.composer.compose("toolbox", "01ARZ3NDEKTSV4RRFFQ69G5FAV",
-        fakeQrExact(8, 16), 8, 128);
+    BufferedImage label = this.composer.compose("toolbox", "01ARZ3NDEKTSV4RRFFQ69G5FAV", fakeQrExact(8, 16), 8, 128);
     assertEquals(128, label.getHeight());
     assertTrue(label.getWidth() > 128, "text must extend the label beyond the QR");
     // QR occupies the left 128x128: sample module centers.
@@ -112,8 +110,7 @@ public class LabelComposerTest {
     BufferedImage qr = fakeQrExact(29, 2);
     BufferedImage label = this.composer.composeCompactStrip("x", "2026-08-21", null, false, qr, 8, 70);
     assertEquals(70, label.getHeight());
-    assertEquals(0, ink(label, 66, 60, label.getWidth(), 70),
-        "no weight -> the bottom text row stays empty");
+    assertEquals(0, ink(label, 66, 60, label.getWidth(), 70), "no weight -> the bottom text row stays empty");
   }
 
   @Test
@@ -134,22 +131,19 @@ public class LabelComposerTest {
 
   @Test
   public void oversizeQrIsRejectedNotClipped() {
-    assertThrows(IllegalArgumentException.class,
-        () -> this.composer.compose("x", "y", fakeQrExact(29, 3), 8, 70));
-    assertThrows(IllegalArgumentException.class,
-        () -> this.composer.composeQrOnly(fakeQrExact(29, 3), 70));
+    assertThrows(IllegalArgumentException.class, () -> this.composer.compose("x", "y", fakeQrExact(29, 3), 8, 70));
+    assertThrows(IllegalArgumentException.class, () -> this.composer.composeQrOnly(fakeQrExact(29, 3), 70));
   }
 
   @Test
   public void goldenFileMatchesOnLinux() throws Exception {
-    BufferedImage label = this.composer.compose("toolbox", "01ARZ3NDEKTSV4RRFFQ69G5FAV",
-        fakeQrExact(8, 16), 8, 128);
+    BufferedImage label = this.composer.compose("toolbox", "01ARZ3NDEKTSV4RRFFQ69G5FAV", fakeQrExact(8, 16), 8, 128);
     assertOrUpdateGolden(label, "golden-toolbox-24mm.png");
   }
 
   /**
-   * Linux-gated exact-pixel comparison against src/test/resources/labels/{name},
-   * or regeneration of that file under -Dlabel.golden.update=true.
+   * Linux-gated exact-pixel comparison against src/test/resources/labels/{name}, or regeneration of that file under
+   * -Dlabel.golden.update=true.
    */
   private void assertOrUpdateGolden(BufferedImage label, String name) throws Exception {
     Assumptions.assumeTrue(System.getProperty("os.name").toLowerCase().contains("linux"),
@@ -186,8 +180,8 @@ public class LabelComposerTest {
 
   @Test
   public void standardDieCutLayout() {
-    BufferedImage label = this.composer.composeStandard("Standard Verify", "01ARZ3NDEKTSV4RRFFQ69G5FAV",
-        "test-fixture", 2L, "garage shelf 3", false, null, false, "2026-08-14", fakeQr(), 457, 254);
+    BufferedImage label = this.composer.composeStandard("Standard Verify", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "test-fixture",
+        2L, "garage shelf 3", false, null, false, "2026-08-14", fakeQr(), 457, 254);
     assertEquals(457, label.getWidth());
     assertEquals(254, label.getHeight());
     assertTrue(ink(label, 4, 27, 204, 227) > 1000, "1-in QR on the left");
@@ -212,10 +206,10 @@ public class LabelComposerTest {
 
   @Test
   public void largeDieCutLayout() {
-    BufferedImage label = this.composer.composeLarge("toolbox", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "tool", 3L,
-        "garage", false, null, false,
-        "A long description that certainly needs to wrap across more than one rendered line on the label",
-        "2026-08-14", fakeQr(), 457, 812);
+    BufferedImage label = this.composer.composeLarge("toolbox", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "tool", 3L, "garage",
+        false, null, false,
+        "A long description that certainly needs to wrap across more than one rendered line on the label", "2026-08-14",
+        fakeQr(), 457, 812);
     assertEquals(457, label.getWidth());
     assertEquals(812, label.getHeight());
     assertTrue(ink(label, 23, 4, 434, 415) > 5000, "big QR up top");
@@ -229,8 +223,8 @@ public class LabelComposerTest {
   public void largeDieCutLocationLineAddsInk() {
     BufferedImage without = this.composer.composeLarge("toolbox", "id", "tool", null, null, false, null, false, null,
         "2026-08-14", fakeQr(), 457, 812);
-    BufferedImage with = this.composer.composeLarge("toolbox", "id", "tool", null, "garage shelf 3", false, null, false, null,
-        "2026-08-14", fakeQr(), 457, 812);
+    BufferedImage with = this.composer.composeLarge("toolbox", "id", "tool", null, "garage shelf 3", false, null, false,
+        null, "2026-08-14", fakeQr(), 457, 812);
     assertTrue(ink(with, 0, 430, 457, 780) > ink(without, 0, 430, 457, 780) + 100,
         "the location line must render ink the location-less label lacks");
   }
@@ -245,8 +239,8 @@ public class LabelComposerTest {
 
   @Test
   public void heavyMarkAndExpiryAddInkOnBothLayouts() {
-    BufferedImage plainStd = this.composer.composeStandard("x", "y", "t", null, null, false, null, false,
-        "2026-08-14", fakeQr(), 457, 254);
+    BufferedImage plainStd = this.composer.composeStandard("x", "y", "t", null, null, false, null, false, "2026-08-14",
+        fakeQr(), 457, 254);
     BufferedImage heavyStd = this.composer.composeStandard("x", "y", "t", null, null, true, "2027-01-01", true,
         "2026-08-14", fakeQr(), 457, 254);
     assertTrue(ink(heavyStd, 212, 0, 457, 254) > ink(plainStd, 212, 0, 457, 254) + 100,
@@ -278,8 +272,8 @@ public class LabelComposerTest {
   public void xLargeIdFitsOnOneMonoLine() {
     // the wide canvas exists to end the standard format's two-line id split:
     // the full 26-char ULID must render as a single line with margin to spare
-    BufferedImage label = this.composer.composeXLarge("x", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "t", null, null, false,
-        null, false, "2026-08-15", fakeQr(), 812, 812);
+    BufferedImage label = this.composer.composeXLarge("x", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "t", null, null, false, null,
+        false, "2026-08-15", fakeQr(), 812, 812);
     assertTrue(ink(label, 0, 576, 812, 616) > 200, "id line renders");
     assertEquals(0, ink(label, 750, 576, 812, 616), "id ends well before the right edge");
   }
@@ -294,10 +288,10 @@ public class LabelComposerTest {
 
   @Test
   public void twoXLargeDieCutLayout() {
-    BufferedImage label = this.composer.compose2xLarge("Shipping Crate", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "container",
-        2L, "garage", true, "2027-06-30", true, "@ 34.12345, -86.54321", "scuba, color=orange",
-        "A long description that certainly needs to wrap across more than one rendered line on the label",
-        "2026-08-15", fakeQr(), 812, 1320);
+    BufferedImage label = this.composer.compose2xLarge("Shipping Crate", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "container", 2L,
+        "garage", true, "2027-06-30", true, "@ 34.12345, -86.54321", "scuba, color=orange",
+        "A long description that certainly needs to wrap across more than one rendered line on the label", "2026-08-15",
+        fakeQr(), 812, 1320);
     assertEquals(812, label.getWidth());
     assertEquals(1320, label.getHeight());
     // 609-dot QR centered: x 101..710, y 4..613
@@ -320,8 +314,8 @@ public class LabelComposerTest {
 
   @Test
   public void twoXLargeTolerantOfMissingOptionals() {
-    BufferedImage label = this.composer.compose2xLarge("x", "y", "_", null, null, false, null, false, null, null,
-        null, "2026-08-15", fakeQr(), 812, 1320);
+    BufferedImage label = this.composer.compose2xLarge("x", "y", "_", null, null, false, null, false, null, null, null,
+        "2026-08-15", fakeQr(), 812, 1320);
     assertEquals(1320, label.getHeight());
     assertTrue(ink(label, 0, 620, 812, 1320) > 50, "still renders name/id/footer");
   }
@@ -346,26 +340,25 @@ public class LabelComposerTest {
   @Test
   public void xLargeDieCutGoldenMatchesOnLinux() throws Exception {
     // every field populated, heavy + absolute expiry — the fullest layout
-    BufferedImage label = this.composer.composeXLarge("XLarge Golden", "01ARZ3NDEKTSV4RRFFQ69G5FAV",
-        "test-fixture", 3L, "garage shelf 3", true, "2027-06-30", true, "2026-08-15", fakeQr(), 812, 812);
+    BufferedImage label = this.composer.composeXLarge("XLarge Golden", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "test-fixture", 3L,
+        "garage shelf 3", true, "2027-06-30", true, "2026-08-15", fakeQr(), 812, 812);
     assertOrUpdateGolden(label, "golden-x-large-812x812.png");
   }
 
   @Test
   public void twoXLargeDieCutGoldenMatchesOnLinux() throws Exception {
-    BufferedImage label = this.composer.compose2xLarge("2xLarge Golden", "01ARZ3NDEKTSV4RRFFQ69G5FAV",
-        "test-fixture", 3L, "garage shelf 3", true, "2027-06-30", true, "@ 34.12345, -86.54321",
-        "scuba, color=orange, fragile",
-        "A long description that certainly needs to wrap across more than one rendered line on the label",
-        "2026-08-15", fakeQr(), 812, 1320);
+    BufferedImage label = this.composer.compose2xLarge("2xLarge Golden", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "test-fixture",
+        3L, "garage shelf 3", true, "2027-06-30", true, "@ 34.12345, -86.54321", "scuba, color=orange, fragile",
+        "A long description that certainly needs to wrap across more than one rendered line on the label", "2026-08-15",
+        fakeQr(), 812, 1320);
     assertOrUpdateGolden(label, "golden-2x-large-812x1320.png");
   }
 
   @Test
   public void standardDieCutGoldenMatchesOnLinux() throws Exception {
     // every field populated, heavy + absolute expiry — the fullest layout
-    BufferedImage label = this.composer.composeStandard("Standard Golden", "01ARZ3NDEKTSV4RRFFQ69G5FAV",
-        "test-fixture", 2L, "garage shelf 3", true, "2027-06-30", true, "2026-08-15", fakeQr(), 457, 254);
+    BufferedImage label = this.composer.composeStandard("Standard Golden", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "test-fixture",
+        2L, "garage shelf 3", true, "2027-06-30", true, "2026-08-15", fakeQr(), 457, 254);
     assertOrUpdateGolden(label, "golden-standard-457x254.png");
   }
 
@@ -373,8 +366,8 @@ public class LabelComposerTest {
   public void largeDieCutGoldenMatchesOnLinux() throws Exception {
     BufferedImage label = this.composer.composeLarge("Large Golden", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "tool", 3L,
         "garage shelf 3", true, "2027-06-30", false,
-        "A long description that certainly needs to wrap across more than one rendered line on the label",
-        "2026-08-15", fakeQr(), 457, 812);
+        "A long description that certainly needs to wrap across more than one rendered line on the label", "2026-08-15",
+        fakeQr(), 457, 812);
     assertOrUpdateGolden(label, "golden-large-457x812.png");
   }
 
@@ -382,8 +375,8 @@ public class LabelComposerTest {
   public void standardWithEveryFieldNeverOverlaps() {
     // regression: the fixed-position HEAVY mark collided with the expiry
     // line when qty+loc+expiry pushed the field stack down
-    BufferedImage label = this.composer.composeStandard("Phase 15 Check", "01ARZ3NDEKTSV4RRFFQ69G5FAV",
-        "test-fixture", 3L, "garage shelf 3", true, "2027-06-30", true, "2026-08-15", fakeQr(), 457, 254);
+    BufferedImage label = this.composer.composeStandard("Phase 15 Check", "01ARZ3NDEKTSV4RRFFQ69G5FAV", "test-fixture",
+        3L, "garage shelf 3", true, "2027-06-30", true, "2026-08-15", fakeQr(), 457, 254);
     // the heavy mark lives under the QR now: ink below y=230 on the left
     assertTrue(ink(label, 4, 230, 204, 254) > 50, "HEAVY mark under the QR");
     // scan the text column for rows where two glyph bands merge: every

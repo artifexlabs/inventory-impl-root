@@ -59,18 +59,14 @@ import io.vertx.mutiny.sqlclient.SqlClient;
 import io.vertx.mutiny.sqlclient.Tuple;
 
 /**
- * Postgres-backed {@link InventorySystem}. Every mutation runs in a single
- * transaction that also writes the audit trail row, so a change without its
- * audit entry cannot exist. Schema is managed by the Liquibase changelogs in
- * this module ({@code db/changelog-master.yaml}).
+ * Postgres-backed {@link InventorySystem}. Every mutation runs in a single transaction that also writes the audit trail
+ * row, so a change without its audit entry cannot exist. Schema is managed by the Liquibase changelogs in this module
+ * ({@code db/changelog-master.yaml}).
  *
- * Containment is a TREE (Phase 15): {@code items.container_id} is a single
- * self-reference, so re-parenting is one field write and a child cannot be in
- * two places. Contents are materialized one level deep on read — contained
- * items appear with their own scalar fields but not their own children.
- * Ancestry questions (effective coordinates, cycle refusal) are answered by
- * recursive CTEs, which keeps the walk in the database instead of round-
- * tripping per level.
+ * Containment is a TREE (Phase 15): {@code items.container_id} is a single self-reference, so re-parenting is one field
+ * write and a child cannot be in two places. Contents are materialized one level deep on read — contained items appear
+ * with their own scalar fields but not their own children. Ancestry questions (effective coordinates, cycle refusal)
+ * are answered by recursive CTEs, which keeps the walk in the database instead of round- tripping per level.
  *
  * @author mykel
  *
@@ -110,8 +106,7 @@ public class PgInventorySystem implements InventorySystem {
 
   private final Pool pool;
   private final String principal;
-  private io.artifexlabs.inventory.api.events.EventPublisher events =
-      io.artifexlabs.inventory.api.events.EventPublisher.NOOP;
+  private io.artifexlabs.inventory.api.events.EventPublisher events = io.artifexlabs.inventory.api.events.EventPublisher.NOOP;
 
   public PgInventorySystem(Pool pool, String principal) {
     this.pool = requireNonNull(pool, "pool");
@@ -155,10 +150,11 @@ public class PgInventorySystem implements InventorySystem {
     Item item = DefaultItem.builder().id(Ulid.next()).name(name).displayName(displayName).type(type)
         .timestamp(Instant.now()).build();
     AuditEvent created = event("item.create", item.getId(), ItemFactory.serialize(item));
-    return this.events.announce(this.pool.withTransaction(conn -> conn
-        .preparedQuery("INSERT INTO items (id, name, display_name, type, ts) VALUES ($1, $2, $3, $4, $5)")
-        .execute(Tuple.of(item.getId(), item.getName(), displayName, item.getType(), odt(item.getTimestamp())))
-        .flatMap(v -> audit(conn, created)).map(v -> item)).subscribeAsCompletionStage(), created);
+    return this.events.announce(this.pool.withTransaction(
+        conn -> conn.preparedQuery("INSERT INTO items (id, name, display_name, type, ts) VALUES ($1, $2, $3, $4, $5)")
+            .execute(Tuple.of(item.getId(), item.getName(), displayName, item.getType(), odt(item.getTimestamp())))
+            .flatMap(v -> audit(conn, created)).map(v -> item))
+        .subscribeAsCompletionStage(), created);
   }
 
   @Override
@@ -168,13 +164,13 @@ public class PgInventorySystem implements InventorySystem {
     // pass the same cycle check as addToContainer — otherwise an edit could
     // make an item its own ancestor
     String container = item.getContainerId().orElse(null);
-    return this.events.announce(this.pool.withTransaction(conn -> (container == null
-        ? Uni.createFrom().item(false)
-        : wouldCycle(conn, container, item.getId()))
-        .flatMap(cycle -> cycle ? Uni.createFrom().item(false)
-            : conn.preparedQuery(UPDATE_ITEM).execute(updateTuple(item))
-                .flatMap(rs -> rs.rowCount() == 0 ? Uni.createFrom().item(false)
-                    : replaceTags(conn, item).flatMap(v -> audit(conn, updated)).map(v -> true))))
+    return this.events.announce(this.pool
+        .withTransaction(
+            conn -> (container == null ? Uni.createFrom().item(false) : wouldCycle(conn, container, item.getId()))
+                .flatMap(cycle -> cycle ? Uni.createFrom().item(false)
+                    : conn.preparedQuery(UPDATE_ITEM).execute(updateTuple(item))
+                        .flatMap(rs -> rs.rowCount() == 0 ? Uni.createFrom().item(false)
+                            : replaceTags(conn, item).flatMap(v -> audit(conn, updated)).map(v -> true))))
         .subscribeAsCompletionStage(), updated);
   }
 
@@ -185,15 +181,14 @@ public class PgInventorySystem implements InventorySystem {
     // NULL): removing a shelf must not delete what was on it
     return this.events.announce(this.pool
         .withTransaction(conn -> conn.preparedQuery("DELETE FROM items WHERE id=$1").execute(Tuple.of(id))
-            .flatMap(rs -> rs.rowCount() == 0 ? Uni.createFrom().item(false)
-                : audit(conn, deleted).map(v -> true)))
+            .flatMap(rs -> rs.rowCount() == 0 ? Uni.createFrom().item(false) : audit(conn, deleted).map(v -> true)))
         .subscribeAsCompletionStage(), deleted);
   }
 
   @Override
   public CompletionStage<Optional<Item>> getContainer(String itemId) {
-    return loadAll(this.pool).map(m -> Optional.ofNullable(m.get(itemId))
-        .flatMap(Item::getContainerId).map(m::get)).subscribeAsCompletionStage();
+    return loadAll(this.pool).map(m -> Optional.ofNullable(m.get(itemId)).flatMap(Item::getContainerId).map(m::get))
+        .subscribeAsCompletionStage();
   }
 
   @Override
@@ -211,23 +206,22 @@ public class PgInventorySystem implements InventorySystem {
     if (containerId == null || containerId.equals(itemId))
       return CompletableFuture.completedStage(false);
     AuditEvent moved = event(action, itemId, new JsonObject().put("containerId", containerId));
-    return this.events.announce(this.pool.withTransaction(conn -> bothExist(conn, containerId, itemId)
-        .flatMap(ok -> !ok ? Uni.createFrom().item(false)
+    return this.events.announce(this.pool
+        .withTransaction(conn -> bothExist(conn, containerId, itemId).flatMap(ok -> !ok ? Uni.createFrom().item(false)
             : wouldCycle(conn, containerId, itemId).flatMap(cycle -> cycle ? Uni.createFrom().item(false)
                 : conn.preparedQuery("UPDATE items SET container_id=$1 WHERE id=$2")
-                    .execute(Tuple.of(containerId, itemId))
-                    .flatMap(v -> audit(conn, moved)).map(v -> true))))
+                    .execute(Tuple.of(containerId, itemId)).flatMap(v -> audit(conn, moved)).map(v -> true))))
         .subscribeAsCompletionStage(), moved);
   }
 
   @Override
   public CompletionStage<Boolean> removeFromContainer(String containerId, String itemId) {
     AuditEvent uncontained = event("item.uncontain", itemId, new JsonObject().put("containerId", containerId));
-    return this.events.announce(this.pool.withTransaction(conn -> conn
-        .preparedQuery("UPDATE items SET container_id=NULL WHERE id=$1 AND container_id=$2")
-        .execute(Tuple.of(itemId, containerId))
-        .flatMap(rs -> rs.rowCount() == 0 ? Uni.createFrom().item(false)
-            : audit(conn, uncontained).map(v -> true)))
+    return this.events.announce(this.pool
+        .withTransaction(
+            conn -> conn.preparedQuery("UPDATE items SET container_id=NULL WHERE id=$1 AND container_id=$2")
+                .execute(Tuple.of(itemId, containerId)).flatMap(
+                    rs -> rs.rowCount() == 0 ? Uni.createFrom().item(false) : audit(conn, uncontained).map(v -> true)))
         .subscribeAsCompletionStage(), uncontained);
   }
 
@@ -244,24 +238,23 @@ public class PgInventorySystem implements InventorySystem {
   @Override
   public CompletionStage<Boolean> tag(String itemId, ItemTag tag) {
     AuditEvent tagged = event("item.tag", itemId, tag.toJson());
-    return this.events.announce(this.pool.withTransaction(conn -> exists(conn, itemId).flatMap(ok -> !ok
-        ? Uni.createFrom().item(false)
-        : conn.preparedQuery("""
-            INSERT INTO item_tags (item_id, tag_key, tag_value) VALUES ($1, $2, $3)
-            ON CONFLICT (item_id, tag_key) DO UPDATE SET tag_value = EXCLUDED.tag_value""")
-            .execute(Tuple.of(itemId, tag.key(), tag.value()))
-            .flatMap(v -> audit(conn, tagged)).map(v -> true)))
+    return this.events.announce(this.pool
+        .withTransaction(conn -> exists(conn, itemId).flatMap(ok -> !ok ? Uni.createFrom().item(false)
+            : conn.preparedQuery("""
+                INSERT INTO item_tags (item_id, tag_key, tag_value) VALUES ($1, $2, $3)
+                ON CONFLICT (item_id, tag_key) DO UPDATE SET tag_value = EXCLUDED.tag_value""")
+                .execute(Tuple.of(itemId, tag.key(), tag.value())).flatMap(v -> audit(conn, tagged)).map(v -> true)))
         .subscribeAsCompletionStage(), tagged);
   }
 
   @Override
   public CompletionStage<Boolean> untag(String itemId, String key) {
     AuditEvent untagged = event("item.untag", itemId, new JsonObject().put("key", key));
-    return this.events.announce(this.pool.withTransaction(conn -> conn
-        .preparedQuery("DELETE FROM item_tags WHERE item_id=$1 AND lower(tag_key)=lower($2)")
-        .execute(Tuple.of(itemId, key))
-        .flatMap(rs -> rs.rowCount() == 0 ? Uni.createFrom().item(false)
-            : audit(conn, untagged).map(v -> true)))
+    return this.events.announce(this.pool
+        .withTransaction(
+            conn -> conn.preparedQuery("DELETE FROM item_tags WHERE item_id=$1 AND lower(tag_key)=lower($2)")
+                .execute(Tuple.of(itemId, key)).flatMap(
+                    rs -> rs.rowCount() == 0 ? Uni.createFrom().item(false) : audit(conn, untagged).map(v -> true)))
         .subscribeAsCompletionStage(), untagged);
   }
 
@@ -284,21 +277,19 @@ public class PgInventorySystem implements InventorySystem {
     AuditEvent added = event("item.identity-add", itemId, identity.toJson());
     // the INSERT is the atomic claim; the follow-up SELECT only explains a
     // conflict, so no concurrent claimer can slip between check and claim
-    CompletionStage<Claim> tx = this.pool.withTransaction(conn -> exists(conn, itemId).flatMap(ok -> !ok
-        ? Uni.createFrom().nullItem()
-        : conn.preparedQuery("""
-            INSERT INTO item_identities (kind, value, item_id) VALUES ($1, $2, $3)
-            ON CONFLICT (kind, value) DO NOTHING""")
-            .execute(Tuple.of(identity.kind(), identity.value(), itemId))
-            .flatMap(rs -> rs.rowCount() == 1 ? audit(conn, added).map(v -> Claim.ADDED)
-                : conn.preparedQuery("SELECT item_id FROM item_identities WHERE kind=$1 AND value=$2")
-                    .execute(Tuple.of(identity.kind(), identity.value()))
-                    .flatMap(cur -> {
-                      String claimed = cur.iterator().next().getString("item_id");
-                      return claimed.equals(itemId) ? Uni.createFrom().item(Claim.IDEMPOTENT)
-                          : Uni.createFrom().failure(new IllegalStateException("identity " + identity.kind()
-                              + ":" + identity.value() + " already claims item " + claimed));
-                    }))))
+    CompletionStage<Claim> tx = this.pool
+        .withTransaction(conn -> exists(conn, itemId).flatMap(ok -> !ok ? Uni.createFrom().nullItem()
+            : conn.preparedQuery("""
+                INSERT INTO item_identities (kind, value, item_id) VALUES ($1, $2, $3)
+                ON CONFLICT (kind, value) DO NOTHING""").execute(Tuple.of(identity.kind(), identity.value(), itemId))
+                .flatMap(rs -> rs.rowCount() == 1 ? audit(conn, added).map(v -> Claim.ADDED)
+                    : conn.preparedQuery("SELECT item_id FROM item_identities WHERE kind=$1 AND value=$2")
+                        .execute(Tuple.of(identity.kind(), identity.value())).flatMap(cur -> {
+                          String claimed = cur.iterator().next().getString("item_id");
+                          return claimed.equals(itemId) ? Uni.createFrom().item(Claim.IDEMPOTENT)
+                              : Uni.createFrom().failure(new IllegalStateException("identity " + identity.kind() + ":"
+                                  + identity.value() + " already claims item " + claimed));
+                        }))))
         .subscribeAsCompletionStage();
     // only a real claim wrote an audit row, so only it announces
     return tx.thenApply(claim -> {
@@ -311,11 +302,11 @@ public class PgInventorySystem implements InventorySystem {
   @Override
   public CompletionStage<Boolean> removeIdentity(String itemId, io.artifexlabs.inventory.api.ItemIdentity identity) {
     AuditEvent removed = event("item.identity-remove", itemId, identity.toJson());
-    return this.events.announce(this.pool.withTransaction(conn -> conn
-        .preparedQuery("DELETE FROM item_identities WHERE kind=$1 AND value=$2 AND item_id=$3")
-        .execute(Tuple.of(identity.kind(), identity.value(), itemId))
-        .flatMap(rs -> rs.rowCount() == 0 ? Uni.createFrom().item(false)
-            : audit(conn, removed).map(v -> true)))
+    return this.events.announce(this.pool
+        .withTransaction(
+            conn -> conn.preparedQuery("DELETE FROM item_identities WHERE kind=$1 AND value=$2 AND item_id=$3")
+                .execute(Tuple.of(identity.kind(), identity.value(), itemId))
+                .flatMap(rs -> rs.rowCount() == 0 ? Uni.createFrom().item(false) : audit(conn, removed).map(v -> true)))
         .subscribeAsCompletionStage(), removed);
   }
 
@@ -324,8 +315,7 @@ public class PgInventorySystem implements InventorySystem {
     // normalize exactly as storage did (kind lowercased, both trimmed)
     var identity = new io.artifexlabs.inventory.api.ItemIdentity(kind, value);
     return this.pool.preparedQuery("SELECT item_id FROM item_identities WHERE kind=$1 AND value=$2")
-        .execute(Tuple.of(identity.kind(), identity.value()))
-        .flatMap(rs -> {
+        .execute(Tuple.of(identity.kind(), identity.value())).flatMap(rs -> {
           var it = rs.iterator();
           if (!it.hasNext())
             return Uni.createFrom().item(Optional.<Item>empty());
@@ -337,8 +327,7 @@ public class PgInventorySystem implements InventorySystem {
   @Override
   public CompletionStage<List<io.artifexlabs.inventory.api.ItemIdentity>> identitiesOf(String itemId) {
     return this.pool.preparedQuery("SELECT kind, value FROM item_identities WHERE item_id=$1 ORDER BY kind, value")
-        .execute(Tuple.of(itemId))
-        .map(rs -> {
+        .execute(Tuple.of(itemId)).map(rs -> {
           List<io.artifexlabs.inventory.api.ItemIdentity> out = new java.util.ArrayList<>();
           rs.forEach(row -> out
               .add(new io.artifexlabs.inventory.api.ItemIdentity(row.getString("kind"), row.getString("value"))));
@@ -364,28 +353,25 @@ public class PgInventorySystem implements InventorySystem {
 
   /** Inserts the exact event that will be published after commit — same id. */
   private Uni<Void> audit(SqlClient conn, AuditEvent e) {
-    return conn.preparedQuery(INSERT_AUDIT)
-        .execute(Tuple.of(e.getId(), odt(e.getTimestamp()), e.getPrincipal(), e.getAction(), e.getTargetId(),
-            e.getDetails().orElse(null)))
-        .replaceWithVoid();
+    return conn.preparedQuery(INSERT_AUDIT).execute(Tuple.of(e.getId(), odt(e.getTimestamp()), e.getPrincipal(),
+        e.getAction(), e.getTargetId(), e.getDetails().orElse(null))).replaceWithVoid();
   }
 
   private Uni<Void> replaceTags(SqlClient conn, Item item) {
-    Uni<Void> cleared = conn.preparedQuery("DELETE FROM item_tags WHERE item_id=$1")
-        .execute(Tuple.of(item.getId())).replaceWithVoid();
+    Uni<Void> cleared = conn.preparedQuery("DELETE FROM item_tags WHERE item_id=$1").execute(Tuple.of(item.getId()))
+        .replaceWithVoid();
     Set<ItemTag> tags = item.getTags();
     if (tags.isEmpty())
       return cleared;
     List<Tuple> rows = tags.stream().map(t -> Tuple.of(item.getId(), t.key(), t.value())).toList();
-    return cleared.flatMap(v -> conn
-        .preparedQuery("INSERT INTO item_tags (item_id, tag_key, tag_value) VALUES ($1, $2, $3)")
-        .executeBatch(rows).replaceWithVoid());
+    return cleared
+        .flatMap(v -> conn.preparedQuery("INSERT INTO item_tags (item_id, tag_key, tag_value) VALUES ($1, $2, $3)")
+            .executeBatch(rows).replaceWithVoid());
   }
 
   private Uni<Map<String, Item>> loadAll(SqlClient conn) {
-    return conn.query("SELECT * FROM items").execute()
-        .flatMap(items -> conn.query("SELECT item_id, tag_key, tag_value FROM item_tags").execute()
-            .map(tags -> assemble(items, tags)));
+    return conn.query("SELECT * FROM items").execute().flatMap(items -> conn
+        .query("SELECT item_id, tag_key, tag_value FROM item_tags").execute().map(tags -> assemble(items, tags)));
   }
 
   /** Flat rows in; one-level-deep containment and tags out. */
@@ -418,8 +404,7 @@ public class PgInventorySystem implements InventorySystem {
     DefaultItem.Builder b = DefaultItem.builder().id(r.getString("id")).name(r.getString("name"))
         .displayName(r.getString("display_name")).type(r.getString("type"))
         .timestamp(r.getOffsetDateTime("ts").toInstant()).description(r.getString("description"))
-        .containerId(r.getString("container_id")).heavy(Boolean.TRUE.equals(r.getBoolean("heavy")))
-        .tags(tags);
+        .containerId(r.getString("container_id")).heavy(Boolean.TRUE.equals(r.getBoolean("heavy"))).tags(tags);
     Double lat = r.getDouble("latitude");
     Double lng = r.getDouble("longitude");
     if (lat != null && lng != null)
@@ -454,15 +439,17 @@ public class PgInventorySystem implements InventorySystem {
     Dimensions dims = i.getDimensions().orElse(null);
     LatLong coords = i.getCoordinates().orElse(null);
     Expiration exp = i.getExpiration().orElse(null);
-    return Tuple.from(new Object[] { i.getId(), i.getName(), i.getDisplayName().orElse(null), i.getType(),
-        i.getDescription().orElse(null), i.getContainerId().orElse(null), di == null ? null : di.kind().name(),
-        di == null ? null : di.mutable(), di == null ? null : di.archive(), i.getQuantity().orElse(null),
-        i.getWeight().map(Weight::grams).orElse(null), dims == null ? null : dims.lengthCm(),
-        dims == null ? null : dims.widthCm(), dims == null ? null : dims.heightCm(), odt(i.getTimestamp()),
+    return Tuple.from(new Object[] {
+        i.getId(), i.getName(), i.getDisplayName().orElse(null), i.getType(), i.getDescription().orElse(null),
+        i.getContainerId().orElse(null), di == null ? null : di.kind().name(), di == null ? null : di.mutable(),
+        di == null ? null : di.archive(), i.getQuantity().orElse(null), i.getWeight().map(Weight::grams).orElse(null),
+        dims == null ? null : dims.lengthCm(), dims == null ? null : dims.widthCm(),
+        dims == null ? null : dims.heightCm(), odt(i.getTimestamp()),
         i.getParValues().map(ParValues::minOnHand).orElse(null),
-        i.getParValues().map(ParValues::maxOnHand).orElse(null),
-        coords == null ? null : coords.latitude(), coords == null ? null : coords.longitude(), i.isHeavy(),
-        exp == null ? null : odt(exp.when()), exp != null && exp.absolute() });
+        i.getParValues().map(ParValues::maxOnHand).orElse(null), coords == null ? null : coords.latitude(),
+        coords == null ? null : coords.longitude(), i.isHeavy(), exp == null ? null : odt(exp.when()),
+        exp != null && exp.absolute()
+    });
   }
 
   private static OffsetDateTime odt(Instant i) {

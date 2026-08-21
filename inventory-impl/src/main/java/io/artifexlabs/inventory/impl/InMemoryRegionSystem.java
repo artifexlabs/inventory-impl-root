@@ -39,9 +39,8 @@ import io.artifexlabs.inventory.api.RegionSystem;
 import io.vertx.core.json.JsonObject;
 
 /**
- * In-memory {@link RegionSystem} for dev and test profiles. Item creation and
- * containment delegate to the {@link InventorySystem} (which audits those
- * steps itself, as the pg implementation's transaction does).
+ * In-memory {@link RegionSystem} for dev and test profiles. Item creation and containment delegate to the
+ * {@link InventorySystem} (which audits those steps itself, as the pg implementation's transaction does).
  *
  * @author mykel
  *
@@ -58,8 +57,9 @@ public class InMemoryRegionSystem implements RegionSystem {
   }
 
   /** View constructor: shares the store, differs only in attribution. */
-  private InMemoryRegionSystem(ConcurrentHashMap<String, AssetRegion> regions, InventorySystem items,
-      AssetStore assets, AuditSink auditSink, String principal) {
+  private InMemoryRegionSystem(ConcurrentHashMap<String, AssetRegion> regions, InventorySystem items, AssetStore assets,
+      AuditSink auditSink, String principal)
+  {
     this.regions = regions;
     this.items = requireNonNull(items, "items");
     this.assets = requireNonNull(assets, "assets");
@@ -69,28 +69,26 @@ public class InMemoryRegionSystem implements RegionSystem {
 
   @Override
   public InMemoryRegionSystem actingAs(String principal) {
-    return new InMemoryRegionSystem(this.regions, this.items.actingAs(principal),
-        this.assets.actingAs(principal), this.auditSink, principal);
+    return new InMemoryRegionSystem(this.regions, this.items.actingAs(principal), this.assets.actingAs(principal),
+        this.auditSink, principal);
   }
 
   @Override
   public CompletionStage<List<AssetRegion>> listRegions(String assetId) {
-    return CompletableFuture.completedStage(this.regions.values().stream()
-        .filter(r -> r.assetId().equals(assetId)).sorted(java.util.Comparator.comparing(AssetRegion::id))
-        .toList());
+    return CompletableFuture.completedStage(this.regions.values().stream().filter(r -> r.assetId().equals(assetId))
+        .sorted(java.util.Comparator.comparing(AssetRegion::id)).toList());
   }
 
   @Override
-  public CompletionStage<Optional<AssetRegion>> createRegion(String assetId, double x, double y, double w,
-      double h, String label) {
+  public CompletionStage<Optional<AssetRegion>> createRegion(String assetId, double x, double y, double w, double h,
+      String label) {
     return this.assets.get(assetId).thenCompose(asset -> {
       if (asset.isEmpty())
         return CompletableFuture.completedStage(Optional.empty());
       AssetRegion region = new AssetRegion(Ulid.next(), assetId, x, y, w, h, null, label, Instant.now());
       this.regions.put(region.id(), region);
       return audit("region.create", asset.get().info().itemId(),
-          new JsonObject().put("assetId", assetId).put("regionId", region.id()))
-          .thenApply(v -> Optional.of(region));
+          new JsonObject().put("assetId", assetId).put("regionId", region.id())).thenApply(v -> Optional.of(region));
     });
   }
 
@@ -100,15 +98,14 @@ public class InMemoryRegionSystem implements RegionSystem {
     if (removed == null)
       return CompletableFuture.completedStage(false);
     return this.assets.get(removed.assetId())
-        .thenCompose(asset -> audit("region.delete",
-            asset.map(a -> a.info().itemId()).orElse(removed.assetId()),
+        .thenCompose(asset -> audit("region.delete", asset.map(a -> a.info().itemId()).orElse(removed.assetId()),
             new JsonObject().put("assetId", removed.assetId()).put("regionId", regionId)))
         .thenApply(v -> true);
   }
 
   @Override
-  public CompletionStage<Optional<Item>> createItemFromRegion(String assetId, double x, double y, double w,
-      double h, String name, String type, String containerId) {
+  public CompletionStage<Optional<Item>> createItemFromRegion(String assetId, double x, double y, double w, double h,
+      String name, String type, String containerId) {
     return this.assets.get(assetId).thenCompose(asset -> {
       if (asset.isEmpty())
         return CompletableFuture.completedStage(Optional.empty());
@@ -128,17 +125,14 @@ public class InMemoryRegionSystem implements RegionSystem {
   }
 
   /** Create the item, contain it, link the region, audit — the shared tail. */
-  private CompletionStage<Optional<Item>> promote(AssetRegion region, String name, String type,
-      String containerId) {
+  private CompletionStage<Optional<Item>> promote(AssetRegion region, String name, String type, String containerId) {
     return this.items.createItem(name, null, type)
         .thenCompose(item -> (containerId == null ? CompletableFuture.completedStage(true)
             : this.items.addToContainer(containerId, item.getId())).thenCompose(contained -> {
-              this.regions.put(region.id(), new AssetRegion(region.id(), region.assetId(), region.x(),
-                  region.y(), region.w(), region.h(), item.getId(), name, region.timestamp()));
-              return audit("item.create-from-region", item.getId(),
-                  new JsonObject().put("assetId", region.assetId()).put("regionId", region.id())
-                      .put("containerId", containerId))
-                  .thenApply(v -> Optional.of(item));
+              this.regions.put(region.id(), new AssetRegion(region.id(), region.assetId(), region.x(), region.y(),
+                  region.w(), region.h(), item.getId(), name, region.timestamp()));
+              return audit("item.create-from-region", item.getId(), new JsonObject().put("assetId", region.assetId())
+                  .put("regionId", region.id()).put("containerId", containerId)).thenApply(v -> Optional.of(item));
             }));
   }
 

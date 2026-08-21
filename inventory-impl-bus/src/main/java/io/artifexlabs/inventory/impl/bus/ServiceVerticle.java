@@ -31,11 +31,10 @@ import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonObject;
 
 /**
- * Base of every bus worker: consumes one service address, runs every message
- * through the {@link BusGuard} (fabric token + role), dispatches to the
- * handler registered for the envelope's action, and replies with the result —
- * or fails the message with an HTTP-aligned code. One instance per service;
- * handlers complete asynchronously through the domain services.
+ * Base of every bus worker: consumes one service address, runs every message through the {@link BusGuard} (fabric token
+ * + role), dispatches to the handler registered for the envelope's action, and replies with the result — or fails the
+ * message with an HTTP-aligned code. One instance per service; handlers complete asynchronously through the domain
+ * services.
  */
 public abstract class ServiceVerticle extends AbstractVerticle {
 
@@ -105,10 +104,9 @@ public abstract class ServiceVerticle extends AbstractVerticle {
   }
 
   /**
-   * Hand this envelope to the storage layer unchanged (PLAN.md Phase 21, ask 2).
-   * Admission already happened here, so the storage address is internal and
-   * unguarded; forwarding the envelope verbatim keeps the acting user and
-   * the operation intact all the way to the backing store.
+   * Hand this envelope to the storage layer unchanged (PLAN.md Phase 21, ask 2). Admission already happened here, so
+   * the storage address is internal and unguarded; forwarding the envelope verbatim keeps the acting user and the
+   * operation intact all the way to the backing store.
    */
   protected final CompletionStage<Object> storage(BusEnvelope envelope) {
     return storage(envelope.toJson());
@@ -117,9 +115,9 @@ public abstract class ServiceVerticle extends AbstractVerticle {
   /** Ask storage for a DIFFERENT operation on behalf of the same caller. */
   protected final CompletionStage<Object> storage(BusEnvelope envelope, String action, String targetId,
       JsonObject data) {
-    return storage(new DefaultBusEnvelope(envelope.version(), envelope.token(), envelope.userId(),
-        envelope.principal(), envelope.roles(), action, java.util.Optional.ofNullable(targetId),
-        data == null ? new JsonObject() : data).toJson());
+    return storage(new DefaultBusEnvelope(envelope.version(), envelope.token(), envelope.userId(), envelope.principal(),
+        envelope.roles(), action, java.util.Optional.ofNullable(targetId), data == null ? new JsonObject() : data)
+        .toJson());
   }
 
   private CompletionStage<Object> storage(JsonObject envelope) {

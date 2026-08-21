@@ -35,8 +35,8 @@ import io.vertx.mutiny.sqlclient.Row;
 import io.vertx.mutiny.sqlclient.Tuple;
 
 /**
- * Postgres {@link TokenService} over the {@code api_tokens} table. Tokens are
- * ULIDs; revocation is a flag so the trail of issued tokens survives.
+ * Postgres {@link TokenService} over the {@code api_tokens} table. Tokens are ULIDs; revocation is a flag so the trail
+ * of issued tokens survives.
  *
  * @author mykel
  *

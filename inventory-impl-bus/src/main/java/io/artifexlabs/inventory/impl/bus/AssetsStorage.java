@@ -28,9 +28,8 @@ import io.vertx.core.json.JsonObject;
  * messages are fully buffered, accepted for photo-sized assets.
  */
 /**
- * Assets operations against the backing store (PLAN.md Phase 21, ask 2). These are
- * whole units of work, never composable row CRUD: a caller that had to
- * stitch two of them together would lose the transaction the backend
+ * Assets operations against the backing store (PLAN.md Phase 21, ask 2). These are whole units of work, never
+ * composable row CRUD: a caller that had to stitch two of them together would lose the transaction the backend
  * guarantees inside one.
  */
 final class AssetsStorage {
@@ -44,8 +43,7 @@ final class AssetsStorage {
       return assets.actingAs(env.principal())
           .store(upload.itemId(), upload.filename(), upload.contentType(), upload.bytes(),
               upload.coordinates().orElse(null), upload.kind())
-          .thenApply(o -> o.map(info -> info.toJson())
-              .orElseThrow(() -> BusServiceException.notFound("no such item")));
+          .thenApply(o -> o.map(info -> info.toJson()).orElseThrow(() -> BusServiceException.notFound("no such item")));
     });
     reg.on(BusActions.ASSETS_CREATE_ITEM, env -> {
       var req = DefaultPhotoItemRequest.fromJson(env.data());
@@ -53,8 +51,7 @@ final class AssetsStorage {
           .createItemFromPhoto(req.name(), req.displayName(), req.type(), req.containerId(), req.filename(),
               req.contentType(), req.bytes(), req.coordinates().orElse(null), req.kind())
           .thenApply(o -> o
-              .map(made -> new JsonObject()
-                  .put("item", io.artifexlabs.inventory.api.ItemFactory.serialize(made.item()))
+              .map(made -> new JsonObject().put("item", io.artifexlabs.inventory.api.ItemFactory.serialize(made.item()))
                   .put("asset", made.asset().toJson()))
               .orElseThrow(() -> BusServiceException.notFound("no such container")));
     });
@@ -63,20 +60,21 @@ final class AssetsStorage {
       return assets.actingAs(env.principal())
           .replace(Envelopes.requireTarget(env), content.filename(), content.contentType(), content.bytes(),
               content.coordinates().orElse(null))
-          .thenApply(o -> o.map(info -> info.toJson())
-              .orElseThrow(() -> BusServiceException.notFound("no such asset")));
+          .thenApply(
+              o -> o.map(info -> info.toJson()).orElseThrow(() -> BusServiceException.notFound("no such asset")));
     });
-    reg.on(BusActions.ASSETS_GET, env -> assets.get(Envelopes.requireTarget(env))
-        .thenApply(o -> o
-            .map(stored -> new JsonObject().put("info", stored.info().toJson()).put("bytes", stored.data()))
-            .orElseThrow(() -> BusServiceException.notFound("no such asset"))));
+    reg.on(BusActions.ASSETS_GET,
+        env -> assets.get(Envelopes.requireTarget(env)).thenApply(
+            o -> o.map(stored -> new JsonObject().put("info", stored.info().toJson()).put("bytes", stored.data()))
+                .orElseThrow(() -> BusServiceException.notFound("no such asset"))));
     reg.on(BusActions.ASSETS_LIST_FOR, env -> assets.listFor(Envelopes.requireTarget(env))
         .thenApply(list -> new JsonArray(list.stream().map(i -> i.toJson()).toList())));
-    reg.on(BusActions.ASSETS_DELETE, env -> assets.actingAs(env.principal()).delete(Envelopes.requireTarget(env)).thenApply(ok -> {
-      if (!ok)
-        throw BusServiceException.notFound("no such asset");
-      return null;
-    }));
-    }
+    reg.on(BusActions.ASSETS_DELETE,
+        env -> assets.actingAs(env.principal()).delete(Envelopes.requireTarget(env)).thenApply(ok -> {
+          if (!ok)
+            throw BusServiceException.notFound("no such asset");
+          return null;
+        }));
+  }
 
 }

@@ -27,9 +27,8 @@ import io.artifexlabs.inventory.api.AuditReader;
 import io.artifexlabs.inventory.api.AuditSink;
 
 /**
- * An {@link AuditSink} that holds events in memory and doubles as the
- * {@link AuditReader} over them. Suitable for tests and dev-mode storage;
- * production uses the transactional Postgres trail.
+ * An {@link AuditSink} that holds events in memory and doubles as the {@link AuditReader} over them. Suitable for tests
+ * and dev-mode storage; production uses the transactional Postgres trail.
  *
  * @author mykel
  *
@@ -48,8 +47,7 @@ public class InMemoryAuditSink implements AuditSink, AuditReader {
   }
 
   private java.util.stream.Stream<AuditEvent> newestFirst() {
-    return this.events.stream()
-        .sorted(java.util.Comparator.comparing(AuditEvent::getTimestamp).reversed());
+    return this.events.stream().sorted(java.util.Comparator.comparing(AuditEvent::getTimestamp).reversed());
   }
 
   @Override

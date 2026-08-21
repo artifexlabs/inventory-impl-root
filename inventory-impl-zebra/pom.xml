@@ -18,18 +18,22 @@
     @formatter:on
 
 -->
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
+
   <parent>
     <groupId>io.artifexlabs.inventory</groupId>
     <artifactId>inventory-impl-root</artifactId>
     <version>0.1.0-SNAPSHOT</version>
   </parent>
+
   <artifactId>inventory-impl-zebra</artifactId>
+
   <name>${project.artifactId}</name>
   <description>The Zebra GK420t label printer: ZPL encoder and the die-cut
     format geometries (standard/large/x-large/2x-large). Consumes the
     caller-rendered QR PNG — no QR machinery of its own.</description>
+
   <dependencies>
     <dependency>
       <groupId>io.artifexlabs.inventory</groupId>

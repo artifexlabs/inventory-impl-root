@@ -32,8 +32,8 @@ public record DefaultRegionBox(String assetId, double x, double y, double w, dou
 
   @Override
   public JsonObject toJson() {
-    JsonObject j = new JsonObject().put("assetId", this.assetId).put("x", this.x).put("y", this.y)
-        .put("w", this.w).put("h", this.h);
+    JsonObject j = new JsonObject().put("assetId", this.assetId).put("x", this.x).put("y", this.y).put("w", this.w)
+        .put("h", this.h);
     if (this.label != null)
       j.put("label", this.label);
     return j;

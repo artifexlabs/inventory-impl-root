@@ -27,13 +27,10 @@ import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;
 
 /**
- * Publishes committed facts on the Vert.x event bus — the firehose address
- * plus the per-category address, always {@code publish} (fan-out), never
- * {@code send}. Whether that bus is process-local or clustered is purely
- * Vert.x configuration; this class is identical either way. Failures are
- * swallowed by contract: the audit table is the log of record, consumers
- * reconcile from it, and a mutation must never fail because a notification
- * could not be delivered.
+ * Publishes committed facts on the Vert.x event bus — the firehose address plus the per-category address, always
+ * {@code publish} (fan-out), never {@code send}. Whether that bus is process-local or clustered is purely Vert.x
+ * configuration; this class is identical either way. Failures are swallowed by contract: the audit table is the log of
+ * record, consumers reconcile from it, and a mutation must never fail because a notification could not be delivered.
  */
 public class VertxEventPublisher implements EventPublisher {
   private final static org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(VertxEventPublisher.class);

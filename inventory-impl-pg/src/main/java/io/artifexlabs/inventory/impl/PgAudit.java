@@ -36,9 +36,8 @@ import io.vertx.mutiny.sqlclient.RowSet;
 import io.vertx.mutiny.sqlclient.Tuple;
 
 /**
- * Postgres audit trail: {@link AuditSink} for standalone events (admin
- * actions — item mutations write their rows inside their own transactions in
- * {@link PgInventorySystem}) and {@link AuditReader} over the whole table.
+ * Postgres audit trail: {@link AuditSink} for standalone events (admin actions — item mutations write their rows inside
+ * their own transactions in {@link PgInventorySystem}) and {@link AuditReader} over the whole table.
  *
  * @author mykel
  *
@@ -62,22 +61,19 @@ public class PgAudit implements AuditSink, AuditReader {
 
   @Override
   public CompletionStage<List<AuditEvent>> recent(int limit, int offset) {
-    return this.pool
-        .preparedQuery("SELECT * FROM audit_events ORDER BY ts DESC, id DESC LIMIT $1 OFFSET $2")
+    return this.pool.preparedQuery("SELECT * FROM audit_events ORDER BY ts DESC, id DESC LIMIT $1 OFFSET $2")
         .execute(Tuple.of(limit, offset)).map(PgAudit::fromRows).subscribeAsCompletionStage();
   }
 
   @Override
   public CompletionStage<List<AuditEvent>> byTarget(String targetId, int limit) {
-    return this.pool
-        .preparedQuery("SELECT * FROM audit_events WHERE target_id=$1 ORDER BY ts DESC, id DESC LIMIT $2")
+    return this.pool.preparedQuery("SELECT * FROM audit_events WHERE target_id=$1 ORDER BY ts DESC, id DESC LIMIT $2")
         .execute(Tuple.of(targetId, limit)).map(PgAudit::fromRows).subscribeAsCompletionStage();
   }
 
   @Override
   public CompletionStage<List<SequencedEvent>> since(long afterSeq, int limit) {
-    return this.pool
-        .preparedQuery("SELECT * FROM audit_events WHERE seq > $1 ORDER BY seq LIMIT $2")
+    return this.pool.preparedQuery("SELECT * FROM audit_events WHERE seq > $1 ORDER BY seq LIMIT $2")
         .execute(Tuple.of(afterSeq, limit)).map(rs -> {
           List<SequencedEvent> out = new ArrayList<>();
           for (Row r : rs)
@@ -94,8 +90,8 @@ public class PgAudit implements AuditSink, AuditReader {
   }
 
   private static AuditEvent fromRow(Row r) {
-    return new DefaultAuditEvent(r.getString("id"), r.getOffsetDateTime("ts").toInstant(),
-        r.getString("principal"), r.getString("action"), r.getString("target_id"),
+    return new DefaultAuditEvent(r.getString("id"), r.getOffsetDateTime("ts").toInstant(), r.getString("principal"),
+        r.getString("action"), r.getString("target_id"),
         r.getValue("details") instanceof io.vertx.core.json.JsonObject j ? j : null);
   }
 }

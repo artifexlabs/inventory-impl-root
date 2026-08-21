@@ -23,17 +23,14 @@ import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 
 /**
- * Stage 1 of the label pipeline: compose a 1-bit label bitmap from the item's
- * QR code and text. The bitmap's height is the printable dot count of the
- * target tape (e.g. 128 dots for 24 mm TZe at 180 dpi); width grows with
- * content. Layout: the module-exact QR sits at the left edge (the unprinted
- * leader tape supplies its left quiet zone, the tape margins the top/bottom);
- * the item name and id stack to its right past an in-label quiet gap.
+ * Stage 1 of the label pipeline: compose a 1-bit label bitmap from the item's QR code and text. The bitmap's height is
+ * the printable dot count of the target tape (e.g. 128 dots for 24 mm TZe at 180 dpi); width grows with content.
+ * Layout: the module-exact QR sits at the left edge (the unprinted leader tape supplies its left quiet zone, the tape
+ * margins the top/bottom); the item name and id stack to its right past an in-label quiet gap.
  *
- * Deterministic per platform: logical SANS_SERIF / MONOSPACED fonts with
- * antialiasing off. Golden-file tests pin the exact Linux/DejaVu rendering —
- * the same fonts the production container ships — and run platform-neutral
- * invariants everywhere else.
+ * Deterministic per platform: logical SANS_SERIF / MONOSPACED fonts with antialiasing off. Golden-file tests pin the
+ * exact Linux/DejaVu rendering — the same fonts the production container ships — and run platform-neutral invariants
+ * everywhere else.
  */
 public class LabelComposer {
 
@@ -41,12 +38,10 @@ public class LabelComposer {
   private final static int MARGIN = 4;
 
   /**
-   * Compose a continuous-tape label. {@code qr} must arrive module-exact
-   * (integer dots per module, no embedded margin — see
-   * {@code QrCodes.render}) and is drawn at its NATURAL size, vertically
-   * centered: an arbitrary rescale emits mixed module widths, which small
-   * codes cannot survive (ongoing item 11). {@code quietDots} is the quiet
-   * zone the text must keep from the code (4 modules of dots).
+   * Compose a continuous-tape label. {@code qr} must arrive module-exact (integer dots per module, no embedded margin —
+   * see {@code QrCodes.render}) and is drawn at its NATURAL size, vertically centered: an arbitrary rescale emits mixed
+   * module widths, which small codes cannot survive (ongoing item 11). {@code quietDots} is the quiet zone the text
+   * must keep from the code (4 modules of dots).
    */
   public BufferedImage compose(String name, String id, BufferedImage qr, int quietDots, int heightDots) {
     if (qr.getHeight() > heightDots)
@@ -78,10 +73,9 @@ public class LabelComposer {
   }
 
   /**
-   * QR-only continuous-tape label for narrow media (12/9 mm), where text
-   * would compute to unreadable sizes: just the module-exact code, vertically
-   * centered, with a small trailing margin — the tape leader and margins
-   * supply the quiet zone (ongoing item 11).
+   * QR-only continuous-tape label for narrow media (12/9 mm), where text would compute to unreadable sizes: just the
+   * module-exact code, vertically centered, with a small trailing margin — the tape leader and margins supply the quiet
+   * zone (ongoing item 11).
    */
   public BufferedImage composeQrOnly(BufferedImage qr, int heightDots) {
     if (qr.getHeight() > heightDots)
@@ -97,12 +91,10 @@ public class LabelComposer {
   }
 
   /**
-   * The Brother {@code 12mm} NAMED format: a compact continuous-tape strip —
-   * the module-exact QR at the left, a small text column (name, printed-on
-   * date, weight when present), and when the item is a two-person lift, a
-   * bold {@code H} standing alone in the lower-right corner. The die-cut
-   * formats spell out {@code ** HEAVY **}; at 70 dots there is only room for
-   * the letter. {@code weightLabel} is nullable (no weight recorded).
+   * The Brother {@code 12mm} NAMED format: a compact continuous-tape strip — the module-exact QR at the left, a small
+   * text column (name, printed-on date, weight when present), and when the item is a two-person lift, a bold {@code H}
+   * standing alone in the lower-right corner. The die-cut formats spell out {@code ** HEAVY **}; at 70 dots there is
+   * only room for the letter. {@code weightLabel} is nullable (no weight recorded).
    */
   public BufferedImage composeCompactStrip(String name, String printedOn, String weightLabel, boolean heavy,
       BufferedImage qr, int quietDots, int heightDots) {
@@ -148,13 +140,11 @@ public class LabelComposer {
   // format-agnostic, so these work on any printer whose media fits.
 
   /**
-   * {@code standard} die-cut format (2.25×1.25 in → 457×254 @203 dpi).
-   * Unlike the continuous-tape layout (whose width grows with content), this
-   * canvas is FIXED — every element is sized to fit or ellipsized, never
-   * clipped by the raster edge. QR at 1 in on the left (≈5 dots/module for a
-   * v3 code — ample); the text column carries name, the full id split
-   * across two mono lines (a ULID must never truncate — it IS the label),
-   * type/qty, location when known, and the printed-on date.
+   * {@code standard} die-cut format (2.25×1.25 in → 457×254 @203 dpi). Unlike the continuous-tape layout (whose width
+   * grows with content), this canvas is FIXED — every element is sized to fit or ellipsized, never clipped by the
+   * raster edge. QR at 1 in on the left (≈5 dots/module for a v3 code — ample); the text column carries name, the full
+   * id split across two mono lines (a ULID must never truncate — it IS the label), type/qty, location when known, and
+   * the printed-on date.
    */
   public BufferedImage composeStandard(String name, String id, String type, Long quantity, String locationName,
       boolean heavy, String expiresOn, boolean expirationAbsolute, String printedOn, BufferedImage qr, int width,
@@ -207,12 +197,10 @@ public class LabelComposer {
   }
 
   /**
-   * {@code large} die-cut format (2.25×4 in → 457×812 @203 dpi): MORE
-   * information and a BIGGER code — the QR centered up top at nearly full
-   * width (scans from across a room), then name, id, and the fields the item
-   * carries (type, quantity, location name, wrapped description) with the
-   * printed-on date at the bottom. {@code locationName} and {@code printedOn}
-   * are passed in so the layout stays a pure function.
+   * {@code large} die-cut format (2.25×4 in → 457×812 @203 dpi): MORE information and a BIGGER code — the QR centered
+   * up top at nearly full width (scans from across a room), then name, id, and the fields the item carries (type,
+   * quantity, location name, wrapped description) with the printed-on date at the bottom. {@code locationName} and
+   * {@code printedOn} are passed in so the layout stays a pure function.
    */
   public BufferedImage composeLarge(String name, String id, String type, Long quantity, String locationName,
       boolean heavy, String expiresOn, boolean expirationAbsolute, String description, String printedOn,
@@ -268,12 +256,10 @@ public class LabelComposer {
   }
 
   /**
-   * {@code x-large} die-cut format (4×4 in → 812×812 @203 dpi): the full
-   * 4-inch head width. A ~2.5 in QR centered up top (room-distance scanning
-   * with dots to spare), then name, the full id on ONE mono line (the wide
-   * canvas ends the standard format's two-line split), type and quantity
-   * sharing a fixed-column line, container name, expiry, the HEAVY mark, and
-   * the printed-on footer. Description/tags/coordinates stay 2x-large-only.
+   * {@code x-large} die-cut format (4×4 in → 812×812 @203 dpi): the full 4-inch head width. A ~2.5 in QR centered up
+   * top (room-distance scanning with dots to spare), then name, the full id on ONE mono line (the wide canvas ends the
+   * standard format's two-line split), type and quantity sharing a fixed-column line, container name, expiry, the HEAVY
+   * mark, and the printed-on footer. Description/tags/coordinates stay 2x-large-only.
    */
   public BufferedImage composeXLarge(String name, String id, String type, Long quantity, String locationName,
       boolean heavy, String expiresOn, boolean expirationAbsolute, String printedOn, BufferedImage qr, int width,
@@ -321,15 +307,13 @@ public class LabelComposer {
   }
 
   /**
-   * {@code 2x-large} die-cut format (4×6.5 in → 812×1320 @203 dpi),
-   * shipping-label size: everything x-large carries plus the rest of what the
-   * item knows — own coordinates, tags, and the wrapped description — with
-   * the QR pushed to a full 3 in. {@code coordinates} and {@code tags} arrive
-   * pre-rendered so the layout stays a pure function.
+   * {@code 2x-large} die-cut format (4×6.5 in → 812×1320 @203 dpi), shipping-label size: everything x-large carries
+   * plus the rest of what the item knows — own coordinates, tags, and the wrapped description — with the QR pushed to a
+   * full 3 in. {@code coordinates} and {@code tags} arrive pre-rendered so the layout stays a pure function.
    */
   public BufferedImage compose2xLarge(String name, String id, String type, Long quantity, String locationName,
-      boolean heavy, String expiresOn, boolean expirationAbsolute, String coordinates, String tags,
-      String description, String printedOn, BufferedImage qr, int width, int height) {
+      boolean heavy, String expiresOn, boolean expirationAbsolute, String coordinates, String tags, String description,
+      String printedOn, BufferedImage qr, int width, int height) {
     BufferedImage label = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_BINARY);
     Graphics2D g = graphics(label);
     try {

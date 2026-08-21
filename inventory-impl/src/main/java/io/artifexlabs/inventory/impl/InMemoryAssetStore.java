@@ -37,8 +37,8 @@ import io.artifexlabs.inventory.api.InventorySystem;
 import io.vertx.core.json.JsonObject;
 
 /**
- * In-memory {@link AssetStore} for dev and test profiles. Assets whose item
- * has since been deleted are pruned lazily on read.
+ * In-memory {@link AssetStore} for dev and test profiles. Assets whose item has since been deleted are pruned lazily on
+ * read.
  *
  * @author mykel
  *
@@ -54,8 +54,9 @@ public class InMemoryAssetStore implements AssetStore {
   }
 
   /** View constructor: shares the store, differs only in attribution. */
-  private InMemoryAssetStore(ConcurrentHashMap<String, StoredAsset> assets, InventorySystem items,
-      AuditSink auditSink, String principal) {
+  private InMemoryAssetStore(ConcurrentHashMap<String, StoredAsset> assets, InventorySystem items, AuditSink auditSink,
+      String principal)
+  {
     this.assets = assets;
     this.items = requireNonNull(items, "items");
     this.auditSink = requireNonNull(auditSink, "auditSink");
@@ -68,16 +69,15 @@ public class InMemoryAssetStore implements AssetStore {
   }
 
   @Override
-  public CompletionStage<Optional<AssetInfo>> store(String itemId, String filename, String contentType,
-      byte[] data, io.artifexlabs.inventory.api.LatLong explicitCoordinates, String kind) {
+  public CompletionStage<Optional<AssetInfo>> store(String itemId, String filename, String contentType, byte[] data,
+      io.artifexlabs.inventory.api.LatLong explicitCoordinates, String kind) {
     return this.items.getItem(itemId).thenCompose(item -> {
       if (item.isEmpty())
         return CompletableFuture.completedStage(Optional.empty());
       io.artifexlabs.inventory.api.LatLong coords = explicitCoordinates != null ? explicitCoordinates
           : ExifGps.extract(data).orElse(null);
       Instant now = Instant.now();
-      AssetInfo info = new AssetInfo(Ulid.next(), itemId, filename, contentType, data.length, now, now,
-          coords, kind);
+      AssetInfo info = new AssetInfo(Ulid.next(), itemId, filename, contentType, data.length, now, now, coords, kind);
       this.assets.put(info.id(), new StoredAsset(info, data.clone()));
       return audit("asset.attach", info).thenApply(v -> Optional.of(info));
     });
@@ -123,23 +123,19 @@ public class InMemoryAssetStore implements AssetStore {
           return CompletableFuture.failedStage(new IllegalStateException(
               "identity upc:" + spec.gtin13() + " already claims item " + claimed.get().getId()));
         return this.items.createItem(spec.name(), spec.displayName(), spec.type()).thenCompose(created -> {
-          var enriched = io.artifexlabs.inventory.api.DefaultItem.builder(created)
-              .description(spec.description())
-              .weight(spec.weightGrams() == null ? null
-                  : new io.artifexlabs.inventory.api.Weight(spec.weightGrams()))
+          var enriched = io.artifexlabs.inventory.api.DefaultItem.builder(created).description(spec.description())
+              .weight(spec.weightGrams() == null ? null : new io.artifexlabs.inventory.api.Weight(spec.weightGrams()))
               .build();
           CompletionStage<?> flow = this.items.updateItem(enriched);
           if (spec.containerId() != null)
             flow = flow.thenCompose(v -> this.items.addToContainer(spec.containerId(), created.getId()));
-          flow = flow.thenCompose(
-              v -> this.items.addIdentity(created.getId(),
-                  new io.artifexlabs.inventory.api.ItemIdentity("upc", spec.gtin13())));
+          flow = flow.thenCompose(v -> this.items.addIdentity(created.getId(),
+              new io.artifexlabs.inventory.api.ItemIdentity("upc", spec.gtin13())));
           for (var tag : spec.tags())
             flow = flow.thenCompose(v -> this.items.tag(created.getId(), tag));
-          CompletionStage<Optional<AssetInfo>> asset = flow.thenCompose(v -> imageBytes == null
-              ? CompletableFuture.completedStage(Optional.<AssetInfo>empty())
-              : store(created.getId(), imageFilename, imageContentType, imageBytes, null,
-                  AssetInfo.KIND_PHOTO));
+          CompletionStage<Optional<AssetInfo>> asset = flow
+              .thenCompose(v -> imageBytes == null ? CompletableFuture.completedStage(Optional.<AssetInfo>empty())
+                  : store(created.getId(), imageFilename, imageContentType, imageBytes, null, AssetInfo.KIND_PHOTO));
           return asset.thenCompose(a -> this.items.getItem(created.getId())
               .thenApply(fresh -> Optional.of(new PhotoItem(fresh.orElse(created), a.orElse(null)))));
         });
@@ -148,12 +144,11 @@ public class InMemoryAssetStore implements AssetStore {
   }
 
   /** A superseded version: what the asset was, held apart from the live map. */
-  public record ArchivedAsset(String archiveId, AssetInfo info, byte[] data, Instant archivedAt,
-      String auditEventId) {
+  public record ArchivedAsset(String archiveId, AssetInfo info, byte[] data, Instant archivedAt, String auditEventId) {
   }
 
-  private final java.util.List<ArchivedAsset> archive =
-      java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+  private final java.util.List<ArchivedAsset> archive = java.util.Collections
+      .synchronizedList(new java.util.ArrayList<>());
 
   /** Superseded versions of an asset, oldest first. (Method: CDI proxies delegate methods, not fields.) */
   public java.util.List<ArchivedAsset> archivedVersions(String assetId) {
@@ -163,8 +158,8 @@ public class InMemoryAssetStore implements AssetStore {
   }
 
   @Override
-  public CompletionStage<Optional<AssetInfo>> replace(String assetId, String filename, String contentType,
-      byte[] data, io.artifexlabs.inventory.api.LatLong explicitCoordinates) {
+  public CompletionStage<Optional<AssetInfo>> replace(String assetId, String filename, String contentType, byte[] data,
+      io.artifexlabs.inventory.api.LatLong explicitCoordinates) {
     StoredAsset previous = this.assets.get(assetId);
     if (previous == null)
       return CompletableFuture.completedStage(Optional.empty());
@@ -179,12 +174,9 @@ public class InMemoryAssetStore implements AssetStore {
     String auditEventId = Ulid.next();
     this.archive.add(new ArchivedAsset(archiveId, previous.info(), previous.data(), now, auditEventId));
     io.vertx.core.json.JsonObject details = new io.vertx.core.json.JsonObject()
-        .put("replaced", previous.info().toJson()).put("archiveId", archiveId)
-        .put("current", next.toJson());
-    return this.auditSink
-        .record(new io.artifexlabs.inventory.api.DefaultAuditEvent(auditEventId, now, this.principal,
-            "asset.replace", assetId, details))
-        .thenApply(v -> Optional.of(next));
+        .put("replaced", previous.info().toJson()).put("archiveId", archiveId).put("current", next.toJson());
+    return this.auditSink.record(new io.artifexlabs.inventory.api.DefaultAuditEvent(auditEventId, now, this.principal,
+        "asset.replace", assetId, details)).thenApply(v -> Optional.of(next));
   }
 
   @Override

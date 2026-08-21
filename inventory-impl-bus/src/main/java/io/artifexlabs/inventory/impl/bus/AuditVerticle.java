@@ -31,15 +31,13 @@ import io.vertx.core.json.JsonArray;
  * to any reader.
  */
 /**
- * The public audit service: admission control and routing only. Every
- * operation is performed by the storage layer behind {@code storage} —
- * this verticle holds no backend reference at all (PLAN.md Phase 21, ask 2).
+ * The public audit service: admission control and routing only. Every operation is performed by the storage layer
+ * behind {@code storage} — this verticle holds no backend reference at all (PLAN.md Phase 21, ask 2).
  */
 public class AuditVerticle extends ServiceVerticle {
 
   public AuditVerticle(BusGuard guard) {
     super(BusActions.addressOf(BusActions.AUDIT_RECENT), guard);
-    forward(BusActions.AUDIT_RECENT,
-        BusActions.AUDIT_BY_TARGET);
+    forward(BusActions.AUDIT_RECENT, BusActions.AUDIT_BY_TARGET);
   }
 }

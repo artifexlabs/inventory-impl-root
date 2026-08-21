@@ -34,11 +34,9 @@ import io.artifexlabs.inventory.api.Item;
 import io.artifexlabs.inventory.api.LatLong;
 
 /**
- * Phase 3 stores, revised for Phase 15: what used to be a Location is now a
- * container with coordinates, so "location" behavior (a place that holds
- * things and knows where it is) is exercised through the one containment
- * tree plus coordinate inheritance. Asset lifecycle is unchanged except for
- * the attach/update timestamps.
+ * Phase 3 stores, revised for Phase 15: what used to be a Location is now a container with coordinates, so "location"
+ * behavior (a place that holds things and knows where it is) is exercised through the one containment tree plus
+ * coordinate inheritance. Asset lifecycle is unchanged except for the attach/update timestamps.
  */
 public class Phase3StoresTest {
   private InMemoryAuditSink audit;
@@ -59,8 +57,7 @@ public class Phase3StoresTest {
   @Test
   public void testPlacesAreContainersWithCoordinates() throws Exception {
     Item garage = await(this.items.createItem("Garage", null, "location"));
-    assertTrue(await(this.items.updateItem(
-        DefaultItem.builder(garage).coordinates(new LatLong(33.7, -84.4)).build())));
+    assertTrue(await(this.items.updateItem(DefaultItem.builder(garage).coordinates(new LatLong(33.7, -84.4)).build())));
     Item box = await(this.items.createItem("box", null, "container"));
     Item wrench = await(this.items.createItem("wrench", null, "tool"));
 
@@ -68,13 +65,11 @@ public class Phase3StoresTest {
     assertTrue(await(this.items.addToContainer(box.getId(), wrench.getId())));
 
     // three-deep inheritance: the wrench pins where the garage pins
-    assertEquals(Optional.of(new LatLong(33.7, -84.4)),
-        await(this.items.effectiveCoordinates(wrench.getId())));
+    assertEquals(Optional.of(new LatLong(33.7, -84.4)), await(this.items.effectiveCoordinates(wrench.getId())));
     // an own pin beats the chain
     assertTrue(await(this.items.updateItem(DefaultItem.builder(await(this.items.getItem(box.getId())).get())
         .coordinates(new LatLong(10.0, 10.0)).build())));
-    assertEquals(Optional.of(new LatLong(10.0, 10.0)),
-        await(this.items.effectiveCoordinates(wrench.getId())));
+    assertEquals(Optional.of(new LatLong(10.0, 10.0)), await(this.items.effectiveCoordinates(wrench.getId())));
     // a root with no pin anywhere resolves to empty
     Item loose = await(this.items.createItem("loose", null, "tool"));
     assertTrue(await(this.items.effectiveCoordinates(loose.getId())).isEmpty());
@@ -95,7 +90,9 @@ public class Phase3StoresTest {
   @Test
   public void testAssetLifecycle() throws Exception {
     Item box = await(this.items.createItem("box", null, "container"));
-    byte[] photo = new byte[] { 1, 2, 3, 4, 5 };
+    byte[] photo = new byte[] {
+        1, 2, 3, 4, 5
+    };
 
     AssetInfo info = await(this.assets.store(box.getId(), "photo.jpg", "image/jpeg", photo)).get();
     assertEquals(5, info.sizeBytes());
@@ -116,7 +113,9 @@ public class Phase3StoresTest {
   @Test
   public void testAssetKindRoundTripsAndDefaults() throws Exception {
     Item wall = await(this.items.createItem("wall", null, "location"));
-    byte[] plan = new byte[] { 9, 9, 9 };
+    byte[] plan = new byte[] {
+        9, 9, 9
+    };
     AssetInfo map = await(this.assets.store(wall.getId(), "plan.png", "image/png", plan, null, "map")).get();
     assertEquals("map", map.kind());
     AssetInfo photo = await(this.assets.store(wall.getId(), "pic.png", "image/png", plan)).get();
@@ -130,8 +129,9 @@ public class Phase3StoresTest {
   public void testCreateItemFromPhoto() throws Exception {
     // EXIF pins the created place itself: 33°44'56"N 84°23'24"W
     byte[] jpeg = GpsJpeg.withGps(33, 44, 56, "N", 84, 23, 24, "W");
-    var made = await(this.assets.createItemFromPhoto("Garage", null, "location", null, "garage.jpg",
-        "image/jpeg", jpeg, null, null)).get();
+    var made = await(
+        this.assets.createItemFromPhoto("Garage", null, "location", null, "garage.jpg", "image/jpeg", jpeg, null, null))
+        .get();
     assertEquals("location", made.item().getType());
     assertTrue(made.item().getCoordinates().isPresent(), "EXIF GPS pinned the place");
     assertEquals(made.item().getId(), made.asset().itemId(), "photo attached to the created item");
@@ -141,21 +141,29 @@ public class Phase3StoresTest {
     assertTrue(this.audit.getEvents().stream().anyMatch(e -> e.getAction().equals("asset.attach")));
 
     // contained variant: created inside an existing container
-    var inside = await(this.assets.createItemFromPhoto("Shelf", null, "location", made.item().getId(),
-        "shelf.png", "image/png", new byte[] { 1 }, null, "map")).get();
+    var inside = await(this.assets.createItemFromPhoto("Shelf", null, "location", made.item().getId(), "shelf.png",
+        "image/png", new byte[] {
+            1
+        }, null, "map")).get();
     assertEquals(Optional.of(made.item().getId()), inside.item().getContainerId());
     assertEquals("map", inside.asset().kind());
 
     // unknown container refuses the whole thing
-    assertTrue(await(this.assets.createItemFromPhoto("x", null, "location", "missing", "f.png", "image/png",
-        new byte[] { 1 }, null, null)).isEmpty());
+    assertTrue(
+        await(this.assets.createItemFromPhoto("x", null, "location", "missing", "f.png", "image/png", new byte[] {
+            1
+        }, null, null)).isEmpty());
   }
 
   @Test
   public void testAssetReplaceArchivesTheSupersededBytes() throws Exception {
     Item box = await(this.items.createItem("box", null, "container"));
-    byte[] first = new byte[] { 1, 1, 1 };
-    byte[] second = new byte[] { 2, 2, 2, 2 };
+    byte[] first = new byte[] {
+        1, 1, 1
+    };
+    byte[] second = new byte[] {
+        2, 2, 2, 2
+    };
     AssetInfo original = await(this.assets.store(box.getId(), "photo.jpg", "image/jpeg", first)).get();
 
     AssetInfo revised = await(this.assets.replace(original.id(), "photo-v2.jpg", "image/jpeg", second, null)).get();
@@ -167,8 +175,8 @@ public class Phase3StoresTest {
 
     // the old bytes are recoverable from the ARCHIVE; the audit event carries
     // only the reference (blobs must never ride the consumer replay feed)
-    var replaceEvent = this.audit.getEvents().stream()
-        .filter(e -> e.getAction().equals("asset.replace")).findFirst().orElseThrow();
+    var replaceEvent = this.audit.getEvents().stream().filter(e -> e.getAction().equals("asset.replace")).findFirst()
+        .orElseThrow();
     var details = replaceEvent.getDetails().orElseThrow();
     assertTrue(details.getString("archiveId") != null, "audit references the archive");
     assertTrue(details.getBinary("archivedBytes") == null, "audit must NOT carry the bytes");
@@ -186,7 +194,9 @@ public class Phase3StoresTest {
   @Test
   public void testAssetsOfDeletedItemArePruned() throws Exception {
     Item box = await(this.items.createItem("box", null, "container"));
-    AssetInfo info = await(this.assets.store(box.getId(), "photo.jpg", "image/jpeg", new byte[] { 9 })).get();
+    AssetInfo info = await(this.assets.store(box.getId(), "photo.jpg", "image/jpeg", new byte[] {
+        9
+    })).get();
     await(this.items.deleteItem(box.getId()));
     assertTrue(await(this.assets.get(info.id())).isEmpty());
     assertTrue(await(this.assets.listFor(box.getId())).isEmpty());

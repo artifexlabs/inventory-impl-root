@@ -27,19 +27,14 @@ import io.vertx.core.json.JsonObject;
  * messages are fully buffered, accepted for photo-sized assets.
  */
 /**
- * The public assets service: admission control and routing only. Every
- * operation is performed by the storage layer behind {@code storage} —
- * this verticle holds no backend reference at all (PLAN.md Phase 21, ask 2).
+ * The public assets service: admission control and routing only. Every operation is performed by the storage layer
+ * behind {@code storage} — this verticle holds no backend reference at all (PLAN.md Phase 21, ask 2).
  */
 public class AssetsVerticle extends ServiceVerticle {
 
   public AssetsVerticle(BusGuard guard) {
     super(BusActions.addressOf(BusActions.ASSETS_STORE), guard);
-    forward(BusActions.ASSETS_STORE,
-        BusActions.ASSETS_CREATE_ITEM,
-        BusActions.ASSETS_REPLACE,
-        BusActions.ASSETS_GET,
-        BusActions.ASSETS_LIST_FOR,
-        BusActions.ASSETS_DELETE);
+    forward(BusActions.ASSETS_STORE, BusActions.ASSETS_CREATE_ITEM, BusActions.ASSETS_REPLACE, BusActions.ASSETS_GET,
+        BusActions.ASSETS_LIST_FOR, BusActions.ASSETS_DELETE);
   }
 }

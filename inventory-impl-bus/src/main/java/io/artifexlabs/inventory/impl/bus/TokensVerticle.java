@@ -27,15 +27,13 @@ import io.vertx.core.json.JsonArray;
 
 /** Token administration over the bus (admin role via the guard). */
 /**
- * The public tokens service: admission control and routing only. Every
- * operation is performed by the storage layer behind {@code storage} —
- * this verticle holds no backend reference at all (PLAN.md Phase 21, ask 2).
+ * The public tokens service: admission control and routing only. Every operation is performed by the storage layer
+ * behind {@code storage} — this verticle holds no backend reference at all (PLAN.md Phase 21, ask 2).
  */
 public class TokensVerticle extends ServiceVerticle {
 
   public TokensVerticle(BusGuard guard) {
     super(BusActions.addressOf(BusActions.TOKENS_FOR_USER), guard);
-    forward(BusActions.TOKENS_FOR_USER,
-        BusActions.TOKENS_REVOKE);
+    forward(BusActions.TOKENS_FOR_USER, BusActions.TOKENS_REVOKE);
   }
 }
