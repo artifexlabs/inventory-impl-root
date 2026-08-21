@@ -17,6 +17,8 @@
  */
 package io.artifexlabs.inventory.impl;
 
+import io.artifexlabs.inventory.api.events.StatusEvent;
+import io.artifexlabs.inventory.api.events.StatusPublisher;
 import io.artifexlabs.inventory.impl.printer.common.LabelComposer;
 import io.artifexlabs.inventory.impl.printer.common.Tcp9100Transport;
 
@@ -56,6 +58,8 @@ public class ZebraPrinter implements LabelPrinter {
    * x-large 4×4 in, 2x-large 4×6.5 in (all @203 dpi).
    */
   // keyed by the LabelPrinter.FORMAT_* names (shared caller vocabulary)
+  /** The {@code source} every StatusEvent from this printer carries. */
+  private final static String SOURCE = "printer.zebra";
   private final static Map<String, Geometry> FORMATS = Map.of(
       FORMAT_STANDARD, new Geometry(457, 254),
       FORMAT_LARGE, new Geometry(457, 812),
@@ -66,6 +70,8 @@ public class ZebraPrinter implements LabelPrinter {
   private final ZplEncoder encoder = new ZplEncoder();
   private final Tcp9100Transport transport;
   private final String defaultFormat;
+  /** Where refusals go so a HUMAN hears about them, not just the log (MORE_VERTX). */
+  private StatusPublisher status = StatusPublisher.NOOP;
   private Function<String, CompletionStage<Optional<Item>>> containerLookup;
 
   public ZebraPrinter(String host, int port, String defaultFormat) {
@@ -81,6 +87,12 @@ public class ZebraPrinter implements LabelPrinter {
    * the location line is simply omitted). Lookup failures never fail a
    * print; a label without its location line beats no label.
    */
+  /** Route refusals to a status channel; returns this for fluent construction. */
+  public ZebraPrinter withStatusPublisher(StatusPublisher status) {
+    this.status = status == null ? StatusPublisher.NOOP : status;
+    return this;
+  }
+
   public ZebraPrinter withContainerLookup(Function<String, CompletionStage<Optional<Item>>> lookup) {
     this.containerLookup = lookup;
     return this;
@@ -97,6 +109,10 @@ public class ZebraPrinter implements LabelPrinter {
     Geometry geometry = FORMATS.get(chosen);
     if (geometry == null) {
       log.warn("Unknown label format {} for item {} (know {})", chosen, item.getId(), FORMATS.keySet());
+      this.status.publish(StatusEvent.error("printer.unknown-format",
+          "Label refused: '" + chosen + "' is not a format this printer knows.")
+          .source(SOURCE).subject("itemId", item.getId()).subject("format", chosen)
+          .detail("Known formats: " + FORMATS.keySet()));
       return CompletableFuture.completedStage(false);
     }
     return locationName(item).thenCompose(locName -> CompletableFuture.supplyAsync(() -> {
@@ -129,6 +145,10 @@ public class ZebraPrinter implements LabelPrinter {
         return true;
       } catch (Exception e) {
         log.warn("Label print failed for item {}: {}", item.getId(), e.toString());
+        this.status.publish(StatusEvent.error("printer.print-failed",
+            "The label could not be printed — the printer did not accept the job.")
+            .source(SOURCE).subject("itemId", item.getId())
+            .detail("Sending the label to the Zebra printer failed: " + e));
         return false;
       }
     }));

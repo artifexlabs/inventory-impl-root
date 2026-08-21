@@ -69,7 +69,9 @@ public final class BusWorkers {
         vertx.deployVerticle(new CatalogVerticle(guard, s.catalog(), s.assets()), workerThread),
         vertx.deployVerticle(new UsersVerticle(guard, s.users(), s.auditSink())),
         vertx.deployVerticle(new TokensVerticle(guard, s.tokens(), s.auditSink())),
-        vertx.deployVerticle(new AuthVerticle(guard, s.users(), s.tokens(), s.auditSink(), provision))))
+        vertx.deployVerticle(new AuthVerticle(guard, s.users(), s.tokens(), s.auditSink(), provision)),
+        // the status topic's baseline consumer: never write-only (MORE_VERTX)
+        vertx.deployVerticle(new StatusLogVerticle())))
         .mapEmpty();
     CompletableFuture<Void> done = new CompletableFuture<>();
     all.onComplete(r -> {

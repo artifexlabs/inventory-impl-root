@@ -273,6 +273,91 @@ public class BrotherPTouchPrinterTest {
     }
   }
 
+  /** Records what a refusal told the user, so tests can assert BOTH faces. */
+  private final static class RecordingStatus
+      implements io.artifexlabs.inventory.api.events.StatusPublisher {
+    private final java.util.List<io.artifexlabs.inventory.api.events.StatusEvent> events =
+        java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    @Override
+    public void publish(io.artifexlabs.inventory.api.events.StatusEvent event) {
+      this.events.add(event);
+    }
+
+    io.artifexlabs.inventory.api.events.StatusEvent only() {
+      assertEquals(1, this.events.size(), "expected exactly one status event, got " + this.events);
+      return this.events.get(0);
+    }
+  }
+
+  private static void assertBothFaces(io.artifexlabs.inventory.api.events.StatusEvent e, String code) {
+    assertEquals(code, e.code(), "the machine face");
+    assertEquals("printer.brother", e.source());
+    assertTrue(e.message() != null && !e.message().isBlank(), "the human face must be a sentence");
+    assertTrue(e.subject().containsKey("itemId") || e.subject().containsKey("count"),
+        "structured params must identify what failed: " + e.subject());
+    assertEquals(io.artifexlabs.inventory.api.events.StatusEvent.Severity.ERROR, e.severity());
+  }
+
+  @Test
+  public void tapeMismatchTellsTheUserWhichTapeIsNeeded() throws Exception {
+    try (ServerSocket fake = new ServerSocket(0)) {
+      RecordingStatus status = new RecordingStatus();
+      BrotherPTouchPrinter printer = new BrotherPTouchPrinter("localhost", fake.getLocalPort(), 24, status);
+      assertFalse(printer.printLabel(item(), SCAN_URL, qrPng(), "standard").toCompletableFuture().get());
+      var e = status.only();
+      assertBothFaces(e, "printer.tape-mismatch");
+      assertEquals("12", e.subject().get("requiredTapeMm"));
+      assertEquals("24", e.subject().get("loadedTapeMm"));
+      assertTrue(e.message().contains("12 mm") && e.message().contains("24 mm"),
+          "the sentence names both tapes: " + e.message());
+    }
+  }
+
+  @Test
+  public void unknownFormatSaysWhatItKnows() throws Exception {
+    try (ServerSocket fake = new ServerSocket(0)) {
+      RecordingStatus status = new RecordingStatus();
+      BrotherPTouchPrinter printer = new BrotherPTouchPrinter("localhost", fake.getLocalPort(), 24, status);
+      assertFalse(printer.printLabel(item(), SCAN_URL, qrPng(), "x-large").toCompletableFuture().get());
+      var e = status.only();
+      assertBothFaces(e, "printer.unknown-format");
+      assertEquals("x-large", e.subject().get("format"));
+      assertTrue(e.detailText().orElse("").contains("tiny"), "detail lists the known formats");
+    }
+  }
+
+  @Test
+  public void tapeTooNarrowForAnyScannableCodeReportsWhy() throws Exception {
+    try (ServerSocket fake = new ServerSocket(0)) {
+      // 6mm = 32 dots; the smallest payload (25-module ULID) needs 50
+      RecordingStatus status = new RecordingStatus();
+      BrotherPTouchPrinter printer = new BrotherPTouchPrinter("localhost", fake.getLocalPort(), 6, status);
+      assertFalse(printer.printLabel(item(), SCAN_URL, qrPng(), null).toCompletableFuture().get());
+      var e = status.only();
+      assertBothFaces(e, "printer.no-scannable-qr");
+      assertEquals("6", e.subject().get("tapeMm"));
+      assertTrue(e.detailText().orElse("").contains("wider tape"), "detail says what to do about it");
+    }
+  }
+
+  @Test
+  public void unreachablePrinterIsReportedNotJustLogged() throws Exception {
+    RecordingStatus status = new RecordingStatus();
+    BrotherPTouchPrinter printer = new BrotherPTouchPrinter("localhost", 1, 24, status);
+    assertFalse(printer.printLabel(item(), SCAN_URL, qrPng(), null).toCompletableFuture().get());
+    assertBothFaces(status.only(), "printer.print-failed");
+  }
+
+  @Test
+  public void refusalsStayQuietWhenNoStatusChannelIsWired() throws Exception {
+    try (ServerSocket fake = new ServerSocket(0)) {
+      // the 3-arg constructor keeps NOOP: emitting must never be mandatory
+      BrotherPTouchPrinter printer = new BrotherPTouchPrinter("localhost", fake.getLocalPort(), 24);
+      assertFalse(printer.printLabel(item(), SCAN_URL, qrPng(), "standard").toCompletableFuture().get());
+    }
+  }
+
   @Test
   public void unknownFormatRefusesWithoutTouchingThePrinter() throws Exception {
     try (ServerSocket fake = new ServerSocket(0)) {

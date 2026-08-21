@@ -17,6 +17,8 @@
  */
 package io.artifexlabs.inventory.impl;
 
+import io.artifexlabs.inventory.api.events.StatusEvent;
+import io.artifexlabs.inventory.api.events.StatusPublisher;
 import io.artifexlabs.inventory.impl.printer.common.LabelComposer;
 import io.artifexlabs.inventory.impl.printer.common.Tcp9100Transport;
 
@@ -70,6 +72,8 @@ public class BrotherPTouchPrinter implements LabelPrinter {
   // standard/standard-qr = 12 mm, large = 24 mm, tiny = 9 mm — and refuse
   // when the loaded width differs (a mismatched raster prints garbage;
   // refusal beats wasted stock). FORMAT_QR_ONLY alone is width-independent.
+  /** The {@code source} every StatusEvent from this printer carries. */
+  private final static String SOURCE = "printer.brother";
   private final static String KNOWN_FORMATS = String.join(", ", FORMAT_TINY, FORMAT_STANDARD_QR_ONLY,
       FORMAT_STANDARD, FORMAT_LARGE, FORMAT_QR_ONLY);
 
@@ -78,9 +82,16 @@ public class BrotherPTouchPrinter implements LabelPrinter {
   private final Tcp9100Transport transport;
   private final int tapeMm;
   private final int dots;
+  /** Where refusals go so a HUMAN hears about them, not just the log (MORE_VERTX). */
+  private final StatusPublisher status;
 
   public BrotherPTouchPrinter(String host, int port, int tapeMm) {
+    this(host, port, tapeMm, StatusPublisher.NOOP);
+  }
+
+  public BrotherPTouchPrinter(String host, int port, int tapeMm, StatusPublisher status) {
     this.transport = new Tcp9100Transport(host, port);
+    this.status = status == null ? StatusPublisher.NOOP : status;
     this.tapeMm = tapeMm;
     Integer d = TAPE_DOTS.get(tapeMm);
     if (d == null)
@@ -107,6 +118,10 @@ public class BrotherPTouchPrinter implements LabelPrinter {
         return true;
       } catch (Exception e) {
         log.warn("Label print failed for item {}: {}", item.getId(), e.toString());
+        this.status.publish(StatusEvent.error("printer.print-failed",
+            "The label could not be printed — the printer did not accept the job.")
+            .source(SOURCE).subject("itemId", item.getId()).subject("tapeMm", String.valueOf(this.tapeMm))
+            .detail("Sending the label to the Brother printer failed: " + e));
         return false;
       }
     });
@@ -132,6 +147,12 @@ public class BrotherPTouchPrinter implements LabelPrinter {
           if (label == null) {
             log.warn("Batch refused: no scannable label fits {}mm tape for item {}", this.tapeMm,
                 r.item().getId());
+            this.status.publish(StatusEvent.error("printer.batch-refused",
+                "The label run was refused because one of its labels could not be produced.")
+                .source(SOURCE).subject("itemId", r.item().getId())
+                .subject("tapeMm", String.valueOf(this.tapeMm)).subject("count", String.valueOf(requests.size()))
+                .detail("A chained run prints as one strip, so a label that cannot be rendered "
+                    + "cancels the whole run rather than printing a partial one."));
             return false;
           }
           labels.add(label);
@@ -144,6 +165,11 @@ public class BrotherPTouchPrinter implements LabelPrinter {
         return true;
       } catch (Exception e) {
         log.warn("Batch label print failed: {}", e.toString());
+        this.status.publish(StatusEvent.error("printer.print-failed",
+            "The label run could not be printed — the printer did not accept the job.")
+            .source(SOURCE).subject("count", String.valueOf(requests.size()))
+            .subject("tapeMm", String.valueOf(this.tapeMm))
+            .detail("Sending the chained run to the Brother printer failed: " + e));
         return false;
       }
     });
@@ -159,6 +185,10 @@ public class BrotherPTouchPrinter implements LabelPrinter {
         return true;
       } catch (Exception e) {
         log.warn("Tape feed failed: {}", e.toString());
+        this.status.publish(StatusEvent.error("printer.feed-failed",
+            "The tape could not be fed — the printer did not accept the job.")
+            .source(SOURCE).subject("tapeMm", String.valueOf(this.tapeMm))
+            .detail("Sending the feed command to the Brother printer failed: " + e));
         return false;
       }
     });
@@ -178,6 +208,10 @@ public class BrotherPTouchPrinter implements LabelPrinter {
       case FORMAT_LARGE -> tapeIs(24, format, item) ? composeNameId(item, scanUrl) : null;
       default -> {
         log.warn("Unknown label format {} for item {} (know [{}])", format, item.getId(), KNOWN_FORMATS);
+        this.status.publish(StatusEvent.error("printer.unknown-format",
+            "Label refused: '" + format + "' is not a format this printer knows.")
+            .source(SOURCE).subject("itemId", item.getId()).subject("format", format)
+            .detail("Known formats: " + KNOWN_FORMATS));
         yield null;
       }
     };
@@ -188,6 +222,12 @@ public class BrotherPTouchPrinter implements LabelPrinter {
       return true;
     log.warn("Format {} needs {}mm tape but {}mm is loaded — refusing label for item {}", format, requiredMm,
         this.tapeMm, item.getId());
+    this.status.publish(StatusEvent.error("printer.tape-mismatch",
+        "Label refused: format '" + format + "' needs " + requiredMm + " mm tape, but " + this.tapeMm
+            + " mm is loaded.")
+        .source(SOURCE).subject("itemId", item.getId()).subject("format", format)
+        .subject("requiredTapeMm", String.valueOf(requiredMm)).subject("loadedTapeMm", String.valueOf(this.tapeMm))
+        .detail("Load " + requiredMm + " mm tape, or choose a format that matches the tape in the printer."));
     return false;
   }
 
@@ -208,6 +248,12 @@ public class BrotherPTouchPrinter implements LabelPrinter {
     if (this.dots / matrix.getWidth() < MIN_DOTS_PER_MODULE) {
       log.warn("No scannable QR fits {}mm tape ({} dots) for item {} — smallest payload needs {} modules",
           this.tapeMm, this.dots, item.getId(), matrix.getWidth());
+      this.status.publish(StatusEvent.error("printer.no-scannable-qr",
+          "Label refused: no QR code small enough to stay scannable fits " + this.tapeMm + " mm tape.")
+          .source(SOURCE).subject("itemId", item.getId()).subject("tapeMm", String.valueOf(this.tapeMm))
+          .subject("modulesNeeded", String.valueOf(matrix.getWidth()))
+          .detail("Even the shortest payload needs " + matrix.getWidth() + " modules, which this tape cannot "
+              + "print at a readable density. Use wider tape."));
       return null;
     }
     return matrix;
