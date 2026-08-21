@@ -17,11 +17,12 @@
  */
 package io.artifexlabs.inventory.impl.bus;
 
+import io.artifexlabs.inventory.api.bus.PrintPackets;
+
 import java.time.Instant;
 import java.util.concurrent.CompletionStage;
 
 import io.artifexlabs.inventory.api.DefaultAuditEvent;
-import io.artifexlabs.inventory.impl.printer.common.PrintPackets;
 import io.artifexlabs.inventory.api.bus.BusActions;
 import io.artifexlabs.inventory.impl.printer.common.QrCodes;
 import io.artifexlabs.inventory.api.Ulid;

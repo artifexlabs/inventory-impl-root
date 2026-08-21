@@ -17,6 +17,8 @@
  */
 package io.artifexlabs.inventory.impl.printer.common;
 
+import io.artifexlabs.inventory.api.bus.PrintPackets;
+
 import static java.util.Objects.requireNonNull;
 
 import java.util.ArrayList;
