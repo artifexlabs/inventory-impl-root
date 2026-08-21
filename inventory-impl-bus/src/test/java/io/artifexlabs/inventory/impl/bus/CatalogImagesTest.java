@@ -33,7 +33,7 @@ import com.sun.net.httpserver.HttpServer;
 /**
  * Catalog image fetching is best-effort by design: a product photo that
  * cannot be retrieved must never fail the item it was decorating. Moved here
- * with CatalogImages when the bus layer became its own module (MORE_VERTX).
+ * with CatalogImages when the bus layer became its own module (PLAN.md Phase 21).
  */
 public class CatalogImagesTest {
 

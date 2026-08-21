@@ -21,7 +21,7 @@ import io.artifexlabs.inventory.api.bus.BusEnvelope;
 
 /**
  * Envelope reading shared by the public service verticles and the storage
- * layer behind them — the two halves the MORE_VERTX split created.
+ * layer behind them — the two halves the PLAN.md Phase 21 split created.
  */
 final class Envelopes {
 

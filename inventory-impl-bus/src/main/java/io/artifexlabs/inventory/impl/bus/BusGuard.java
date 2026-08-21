@@ -40,7 +40,7 @@ public final class BusGuard {
   private final static String SOURCE = "bus.guard";
 
   private final byte[] fabricToken;
-  /** Denials reach a human here, not only the gateway's error response (MORE_VERTX). */
+  /** Denials reach a human here, not only the gateway's error response (PLAN.md Phase 21). */
   private final StatusPublisher status;
 
   public BusGuard(String fabricToken) {

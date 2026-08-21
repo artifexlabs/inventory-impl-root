@@ -45,7 +45,7 @@ import io.vertx.core.json.JsonObject;
  * worker's configuration — the domain decides who may become a user.
  */
 /**
- * Authentication as storage domain operations (MORE_VERTX ask 2): a login
+ * Authentication as storage domain operations (PLAN.md Phase 21, ask 2): a login
  * is one whole unit of work over users, tokens and the audit sink — exactly
  * the kind of thing that must NOT be composed from separate messages.
  */

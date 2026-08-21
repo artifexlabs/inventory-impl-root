@@ -78,7 +78,7 @@ public class CatalogVerticle extends ServiceVerticle {
             ? CompletableFuture.completedStage(Optional.empty())
             : CatalogImages.fetch(entry.imageUrl());
         // the write is one atomic storage operation; this verticle only
-         // performs the external lookup that precedes it (MORE_VERTX ask 2)
+         // performs the external lookup that precedes it (PLAN.md Phase 21, ask 2)
         JsonObject specJson = new JsonObject().put("gtin13", spec.gtin13()).put("name", spec.name())
             .put("displayName", spec.displayName()).put("type", spec.type())
             .put("description", spec.description()).put("weightGrams", spec.weightGrams())

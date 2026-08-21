@@ -31,7 +31,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 /**
- * The architectural invariant of MORE_VERTX ask 2, pinned so it cannot rot:
+ * The architectural invariant of PLAN.md Phase 21, ask 2, pinned so it cannot rot:
  * <b>only the storage layer touches storage</b>. A public service verticle
  * that regains an {@code InventorySystem} (or any other backend) has quietly
  * reopened the second door this refactor closed, and no integration test
@@ -62,7 +62,7 @@ public class StorageIsolationTest {
       for (Class<?> p : c.getParameterTypes())
         assertTrue(!BACKENDS.contains(p.getName()),
             verticle.getSimpleName() + " takes " + p.getSimpleName()
-                + " — storage must be reached over the bus, not held (MORE_VERTX ask 2)");
+                + " — storage must be reached over the bus, not held (PLAN.md Phase 21, ask 2)");
   }
 
   @ParameterizedTest

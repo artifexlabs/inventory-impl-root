@@ -84,7 +84,7 @@ public class BrotherPTouchPrinter implements LabelPrinter {
   private final Tcp9100Transport transport;
   private final int tapeMm;
   private final int dots;
-  /** Where refusals go so a HUMAN hears about them, not just the log (MORE_VERTX). */
+  /** Where refusals go so a HUMAN hears about them, not just the log (PLAN.md Phase 21). */
   private final StatusPublisher status;
 
   public BrotherPTouchPrinter(String host, int port, int tapeMm) {

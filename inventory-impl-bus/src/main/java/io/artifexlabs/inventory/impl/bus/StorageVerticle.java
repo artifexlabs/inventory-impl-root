@@ -30,7 +30,7 @@ import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonObject;
 
 /**
- * The single door to storage (MORE_VERTX ask 2). Every read and every write
+ * The single door to storage (PLAN.md Phase 21, ask 2). Every read and every write
  * of the backing store passes through this verticle; no other verticle holds
  * an {@code InventorySystem}, {@code AssetStore}, {@code UserStore},
  * {@code TokenService}, {@code RegionSystem}, {@code AuditReader} or

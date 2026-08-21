@@ -95,7 +95,7 @@ public class LabelsVerticle extends ServiceVerticle {
                       new JsonObject().put("accepted", accepted(ack)))
                   .thenApply(v -> {
                     // acceptance, not completion: TCP 9100 never told us more,
-                    // and the outcome arrives on status.events (MORE_VERTX)
+                    // and the outcome arrives on status.events (PLAN.md Phase 21)
                     if (!accepted(ack))
                       throw BusServiceException.unavailable(reason(ack));
                     return (Object) new JsonObject().put("accepted", true);

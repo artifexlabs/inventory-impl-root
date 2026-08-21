@@ -29,7 +29,7 @@ import io.vertx.core.json.JsonObject;
 /**
  * The public assets service: admission control and routing only. Every
  * operation is performed by the storage layer behind {@code storage} —
- * this verticle holds no backend reference at all (MORE_VERTX ask 2).
+ * this verticle holds no backend reference at all (PLAN.md Phase 21, ask 2).
  */
 public class AssetsVerticle extends ServiceVerticle {
 

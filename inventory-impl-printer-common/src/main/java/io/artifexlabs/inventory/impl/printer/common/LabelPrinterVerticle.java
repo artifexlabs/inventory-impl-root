@@ -35,7 +35,7 @@ import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonObject;
 
 /**
- * The printer as a bus participant (MORE_VERTX ask 1): callers send a
+ * The printer as a bus participant (PLAN.md Phase 21, ask 1): callers send a
  * {@link PrintPackets} packet to {@code printer.*} instead of holding a
  * {@link LabelPrinter} reference, which is what lets a printer live in a
  * different process — or eventually on a print-station node — without any

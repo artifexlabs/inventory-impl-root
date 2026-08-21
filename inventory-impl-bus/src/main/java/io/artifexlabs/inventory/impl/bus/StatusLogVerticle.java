@@ -29,7 +29,7 @@ import io.vertx.core.json.JsonObject;
  *
  * <p>
  * This exists so the topic is never write-only — until the SSE gateway
- * lands (MORE_VERTX step 2), this verticle is the ONLY consumer, and after
+ * lands (PLAN.md Phase 21), this verticle is the ONLY consumer, and after
  * it lands this remains the record for anyone reading logs. It deliberately
  * duplicates what the emitting component already logged locally: the point
  * is that one subscription shows every emitter's trouble in one place, in a

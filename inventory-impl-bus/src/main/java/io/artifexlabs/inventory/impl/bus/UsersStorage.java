@@ -36,7 +36,7 @@ import io.vertx.core.json.JsonObject;
  * self-delete refusal keys on the envelope's acting userId.
  */
 /**
- * Users operations against the backing store (MORE_VERTX ask 2). These are
+ * Users operations against the backing store (PLAN.md Phase 21, ask 2). These are
  * whole units of work, never composable row CRUD: a caller that had to
  * stitch two of them together would lose the transaction the backend
  * guarantees inside one.

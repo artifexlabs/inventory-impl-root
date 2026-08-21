@@ -28,7 +28,7 @@ import io.vertx.core.json.JsonArray;
 
 /** Item CRUD and containment over the bus. */
 /**
- * Items operations against the backing store (MORE_VERTX ask 2). These are
+ * Items operations against the backing store (PLAN.md Phase 21, ask 2). These are
  * whole units of work, never composable row CRUD: a caller that had to
  * stitch two of them together would lose the transaction the backend
  * guarantees inside one.

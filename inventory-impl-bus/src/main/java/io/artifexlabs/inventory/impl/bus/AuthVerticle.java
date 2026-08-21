@@ -43,7 +43,7 @@ import io.vertx.core.json.JsonObject;
  */
 /**
  * The public auth service: admission control and routing only; the login
- * and token operations happen in the storage layer (MORE_VERTX ask 2).
+ * and token operations happen in the storage layer (PLAN.md Phase 21, ask 2).
  */
 public class AuthVerticle extends ServiceVerticle {
 

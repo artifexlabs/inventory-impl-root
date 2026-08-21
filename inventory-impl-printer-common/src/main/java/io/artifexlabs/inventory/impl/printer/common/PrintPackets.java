@@ -30,7 +30,7 @@ import io.vertx.core.json.JsonObject;
 
 /**
  * Addresses and wire format for reaching a printer over the event bus
- * (MORE_VERTX ask 1). A caller sends a PACKET carrying everything the
+ * (PLAN.md Phase 21, ask 1). A caller sends a PACKET carrying everything the
  * printer needs to produce a label; the printer answers with an
  * ACCEPTANCE, never a completion.
  *

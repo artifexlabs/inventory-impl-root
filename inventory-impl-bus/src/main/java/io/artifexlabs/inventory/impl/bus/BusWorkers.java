@@ -77,7 +77,7 @@ public final class BusWorkers {
         vertx.deployVerticle(new RegionsVerticle(guard)),
         vertx.deployVerticle(new AuditVerticle(guard)),
         vertx.deployVerticle(new LabelsVerticle(guard), workerThread),
-        // the printer is reached over the bus now (MORE_VERTX): it composes
+        // the printer is reached over the bus now (PLAN.md Phase 21): it composes
         // and rasterizes, which is CPU work that must stay off the event loop
         vertx.deployVerticle(new io.artifexlabs.inventory.impl.printer.common.LabelPrinterVerticle(
             s.printer(), status, s.inventory()::getItem), workerThread),
@@ -86,7 +86,7 @@ public final class BusWorkers {
         vertx.deployVerticle(new UsersVerticle(guard)),
         vertx.deployVerticle(new TokensVerticle(guard)),
         vertx.deployVerticle(new AuthVerticle(guard)),
-        // the status topic's baseline consumer: never write-only (MORE_VERTX)
+        // the status topic's baseline consumer: never write-only (PLAN.md Phase 21)
         vertx.deployVerticle(new StatusLogVerticle())))
         .mapEmpty();
     CompletableFuture<Void> done = new CompletableFuture<>();

@@ -70,7 +70,7 @@ public class ZebraPrinter implements LabelPrinter {
   private final ZplEncoder encoder = new ZplEncoder();
   private final Tcp9100Transport transport;
   private final String defaultFormat;
-  /** Where refusals go so a HUMAN hears about them, not just the log (MORE_VERTX). */
+  /** Where refusals go so a HUMAN hears about them, not just the log (PLAN.md Phase 21). */
   private StatusPublisher status = StatusPublisher.NOOP;
   private Function<String, CompletionStage<Optional<Item>>> containerLookup;
 

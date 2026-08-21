@@ -105,7 +105,7 @@ public abstract class ServiceVerticle extends AbstractVerticle {
   }
 
   /**
-   * Hand this envelope to the storage layer unchanged (MORE_VERTX ask 2).
+   * Hand this envelope to the storage layer unchanged (PLAN.md Phase 21, ask 2).
    * Admission already happened here, so the storage address is internal and
    * unguarded; forwarding the envelope verbatim keeps the acting user and
    * the operation intact all the way to the backing store.
