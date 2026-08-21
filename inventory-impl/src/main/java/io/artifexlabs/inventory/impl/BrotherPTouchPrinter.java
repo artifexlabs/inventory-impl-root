@@ -62,8 +62,22 @@ public class BrotherPTouchPrinter implements LabelPrinter {
   private final static int MIN_DOTS_PER_MODULE = 2;
   /** Tapes with fewer printable dots than this go QR-only (text is unreadable there). */
   private final static int MIN_TEXT_DOTS = 100;
-  /** The one named Brother format: force the QR-only layout on any tape. */
+  // Named Brother formats (item 11 rework, 2026-08-21): like the Zebra
+  // formats, each name is a specific layout — and here also a specific tape,
+  // refused when the loaded width differs (a mismatched raster prints
+  // garbage; refusal beats wasted stock).
+  /** Legacy force-flag: the QR-only layout on ANY tape width. */
   final static String FORMAT_QR_ONLY = "qr-only";
+  /** 9mm: just the bare-ULID code — always the id, never a URL. */
+  final static String FORMAT_9MM_ID_ONLY = "9mm-id-only";
+  /** 12mm: just the code, full-URL payload (v3 at 2 dots/module). */
+  final static String FORMAT_12MM_QR = "12mm-qr";
+  /** 12mm: compact strip — QR + name + printed date + weight + bold H when heavy. */
+  final static String FORMAT_12MM = "12mm";
+  /** 24mm: the QR + name/id text layout (same as automatic on wide tape). */
+  final static String FORMAT_24MM = "24mm";
+  private final static String KNOWN_FORMATS = String.join(", ", FORMAT_9MM_ID_ONLY, FORMAT_12MM_QR, FORMAT_12MM,
+      FORMAT_24MM, FORMAT_QR_ONLY);
 
   private final LabelComposer composer = new LabelComposer();
   private final BrotherRasterEncoder encoder = new BrotherRasterEncoder();
@@ -156,42 +170,83 @@ public class BrotherPTouchPrinter implements LabelPrinter {
     });
   }
 
-  /** null = refused: unknown format, or no scannable label fits this tape. */
+  /** null = refused: unknown format, tape mismatch, or no scannable label fits. */
   private BufferedImage compose(Item item, String scanUrl, String format) {
-    final boolean qrOnly;
     if (format == null || format.isBlank()) {
       // automatic: text layout on wide tapes, QR-only where text can't render
-      qrOnly = this.dots < MIN_TEXT_DOTS;
-    } else if (FORMAT_QR_ONLY.equals(format)) {
-      qrOnly = true;
-    } else {
-      log.warn("Unknown label format {} for item {} (know [{}])", format, item.getId(), FORMAT_QR_ONLY);
-      return null;
+      return this.dots < MIN_TEXT_DOTS ? composeQrOnly(item, scanUrl) : composeNameId(item, scanUrl);
     }
-    // no URL supplied (legacy callers): the bare ULID still resolves in our
-    // own scanners, and stays module-exact
+    return switch (format) {
+      case FORMAT_QR_ONLY -> composeQrOnly(item, scanUrl);
+      case FORMAT_9MM_ID_ONLY -> tapeIs(9, format, item) ? composeQrOnly(item, null) : null;
+      case FORMAT_12MM_QR -> tapeIs(12, format, item) ? composeQrOnly(item, scanUrl) : null;
+      case FORMAT_12MM -> tapeIs(12, format, item) ? composeCompact(item, scanUrl) : null;
+      case FORMAT_24MM -> tapeIs(24, format, item) ? composeNameId(item, scanUrl) : null;
+      default -> {
+        log.warn("Unknown label format {} for item {} (know [{}])", format, item.getId(), KNOWN_FORMATS);
+        yield null;
+      }
+    };
+  }
+
+  private boolean tapeIs(int requiredMm, String format, Item item) {
+    if (this.tapeMm == requiredMm)
+      return true;
+    log.warn("Format {} needs {}mm tape but {}mm is loaded — refusing label for item {}", format, requiredMm,
+        this.tapeMm, item.getId());
+    return false;
+  }
+
+  /**
+   * The scannable matrix for this tape: the URL when given (ECC L keeps it
+   * v3), else — or when the URL cannot reach 2 dots/module — the bare ULID
+   * at ECC Q, which still resolves in our own scanners. null = nothing fits.
+   */
+  private com.google.zxing.common.BitMatrix scannableMatrix(Item item, String scanUrl) {
     String payload = scanUrl != null && !scanUrl.isBlank() ? scanUrl : item.getId();
     var ecc = payload.equals(item.getId())
         ? com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.Q
         : com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.L;
     var matrix = QrCodes.bareMatrix(payload, ecc);
-
-    if (!qrOnly) {
-      int dpm = Math.max(1, this.dots / matrix.getWidth());
-      return this.composer.compose(item.getDisplayName().orElse(item.getName()), item.getId(),
-          QrCodes.render(matrix, dpm), 4 * dpm, this.dots);
-    }
-    // QR-only (narrow tape, or forced by format): the payload tiers down
-    // until the modules fit at a scannable density
     if (this.dots / matrix.getWidth() < MIN_DOTS_PER_MODULE) {
       matrix = QrCodes.bareMatrix(item.getId(), com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.Q);
     }
-    int dpm = this.dots / matrix.getWidth();
-    if (dpm < MIN_DOTS_PER_MODULE) {
+    if (this.dots / matrix.getWidth() < MIN_DOTS_PER_MODULE) {
       log.warn("No scannable QR fits {}mm tape ({} dots) for item {} — smallest payload needs {} modules",
           this.tapeMm, this.dots, item.getId(), matrix.getWidth());
       return null;
     }
-    return this.composer.composeQrOnly(QrCodes.render(matrix, dpm), this.dots);
+    return matrix;
+  }
+
+  private BufferedImage composeQrOnly(Item item, String scanUrl) {
+    var matrix = scannableMatrix(item, scanUrl);
+    if (matrix == null)
+      return null;
+    return this.composer.composeQrOnly(QrCodes.render(matrix, this.dots / matrix.getWidth()), this.dots);
+  }
+
+  private BufferedImage composeNameId(Item item, String scanUrl) {
+    String payload = scanUrl != null && !scanUrl.isBlank() ? scanUrl : item.getId();
+    var ecc = payload.equals(item.getId())
+        ? com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.Q
+        : com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.L;
+    var matrix = QrCodes.bareMatrix(payload, ecc);
+    int dpm = Math.max(1, this.dots / matrix.getWidth());
+    return this.composer.compose(item.getDisplayName().orElse(item.getName()), item.getId(),
+        QrCodes.render(matrix, dpm), 4 * dpm, this.dots);
+  }
+
+  private BufferedImage composeCompact(Item item, String scanUrl) {
+    var matrix = scannableMatrix(item, scanUrl);
+    if (matrix == null)
+      return null;
+    int dpm = this.dots / matrix.getWidth();
+    String weightLabel = item.getWeight().map(w -> w.grams() >= 1000.0
+        ? String.format(java.util.Locale.ROOT, "%.1f kg", w.toKilograms())
+        : Math.round(w.grams()) + " g").orElse(null);
+    return this.composer.composeCompactStrip(item.getDisplayName().orElse(item.getName()),
+        java.time.LocalDate.now().toString(), weightLabel, item.isHeavy(),
+        QrCodes.render(matrix, dpm), 4 * dpm, this.dots);
   }
 }

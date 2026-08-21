@@ -92,6 +92,31 @@ public class LabelComposerTest {
   }
 
   @Test
+  public void compactStripStacksTextAndMarksHeavyLowerRight() {
+    BufferedImage qr = fakeQrExact(29, 2); // the 12mm URL code, 58 dots
+    BufferedImage plain = this.composer.composeCompactStrip("toolbox", "2026-08-21", "1.5 kg", false, qr, 8, 70);
+    assertEquals(70, plain.getHeight());
+    assertTrue(plain.getWidth() > 58 + 8, "text column extends the strip past the code");
+    assertTrue(ink(plain, 66, 0, plain.getWidth(), 70) > 80, "name/date/weight ink in the text column");
+
+    BufferedImage heavy = this.composer.composeCompactStrip("toolbox", "2026-08-21", "1.5 kg", true, qr, 8, 70);
+    assertTrue(heavy.getWidth() > plain.getWidth(), "the H mark appends width to the strip");
+    // the appended zone belongs to the H alone: ink in its lower half only
+    int zoneX = plain.getWidth();
+    assertTrue(ink(heavy, zoneX, 35, heavy.getWidth(), 70) > 20, "bold H ink in the lower-right corner");
+    assertEquals(0, ink(heavy, zoneX, 0, heavy.getWidth(), 10), "the strip above the H stays clear");
+  }
+
+  @Test
+  public void compactStripSkipsTheWeightLineWhenAbsent() {
+    BufferedImage qr = fakeQrExact(29, 2);
+    BufferedImage label = this.composer.composeCompactStrip("x", "2026-08-21", null, false, qr, 8, 70);
+    assertEquals(70, label.getHeight());
+    assertEquals(0, ink(label, 66, 60, label.getWidth(), 70),
+        "no weight -> the bottom text row stays empty");
+  }
+
+  @Test
   public void quietZoneKeepsTextOffTheCode() {
     BufferedImage label = this.composer.compose("x", "y", fakeQrExact(8, 12), 48, 128);
     // 96-dot QR, quiet 48 -> text starts at 144; the gap column stays white

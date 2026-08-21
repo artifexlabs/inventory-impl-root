@@ -96,6 +96,53 @@ public class LabelComposer {
     return label;
   }
 
+  /**
+   * The Brother {@code 12mm} NAMED format: a compact continuous-tape strip —
+   * the module-exact QR at the left, a small text column (name, printed-on
+   * date, weight when present), and when the item is a two-person lift, a
+   * bold {@code H} standing alone in the lower-right corner. The die-cut
+   * formats spell out {@code ** HEAVY **}; at 70 dots there is only room for
+   * the letter. {@code weightLabel} is nullable (no weight recorded).
+   */
+  public BufferedImage composeCompactStrip(String name, String printedOn, String weightLabel, boolean heavy,
+      BufferedImage qr, int quietDots, int heightDots) {
+    if (qr.getHeight() > heightDots)
+      throw new IllegalArgumentException("QR " + qr.getHeight() + " dots exceeds the " + heightDots + "-dot tape");
+    Font nameFont = new Font(Font.SANS_SERIF, Font.BOLD, Math.max(10, (int) (heightDots * 0.26)));
+    Font metaFont = new Font(Font.SANS_SERIF, Font.PLAIN, Math.max(8, (int) (heightDots * 0.18)));
+    Font heavyFont = new Font(Font.SANS_SERIF, Font.BOLD, Math.max(14, (int) (heightDots * 0.50)));
+
+    BufferedImage probe = new BufferedImage(1, 1, BufferedImage.TYPE_BYTE_BINARY);
+    Graphics2D pg = probe.createGraphics();
+    int textWidth = pg.getFontMetrics(nameFont).stringWidth(name);
+    textWidth = Math.max(textWidth, pg.getFontMetrics(metaFont).stringWidth(printedOn));
+    if (weightLabel != null)
+      textWidth = Math.max(textWidth, pg.getFontMetrics(metaFont).stringWidth(weightLabel));
+    int markWidth = heavy ? pg.getFontMetrics(heavyFont).stringWidth("H") : 0;
+    pg.dispose();
+
+    int textX = qr.getWidth() + Math.max(GAP, quietDots);
+    int width = textX + textWidth + (heavy ? GAP + markWidth : 0) + MARGIN;
+    BufferedImage label = new BufferedImage(width, heightDots, BufferedImage.TYPE_BYTE_BINARY);
+    Graphics2D g = graphics(label);
+    try {
+      g.drawImage(qr, 0, (heightDots - qr.getHeight()) / 2, null);
+      g.setFont(nameFont);
+      g.drawString(name, textX, (int) (heightDots * 0.32));
+      g.setFont(metaFont);
+      g.drawString(printedOn, textX, (int) (heightDots * 0.62));
+      if (weightLabel != null)
+        g.drawString(weightLabel, textX, (int) (heightDots * 0.92));
+      if (heavy) {
+        g.setFont(heavyFont);
+        g.drawString("H", width - markWidth - MARGIN, heightDots - 4);
+      }
+    } finally {
+      g.dispose();
+    }
+    return label;
+  }
+
   // --- die-cut formats (fixed width × height; Zebra-class media) ----------
   // The composer owns formats as pure layout functions; encoders stay
   // format-agnostic, so these work on any printer whose media fits.
