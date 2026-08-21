@@ -19,7 +19,6 @@ package io.artifexlabs.inventory.impl.bus;
 
 import java.util.List;
 
-import io.artifexlabs.inventory.api.InventorySystem;
 import io.artifexlabs.inventory.api.Item;
 import io.artifexlabs.inventory.api.ItemFactory;
 import io.artifexlabs.inventory.api.bus.BusActions;
@@ -27,123 +26,32 @@ import io.artifexlabs.inventory.api.bus.BusActions;
 import io.vertx.core.json.JsonArray;
 
 /** Item CRUD and containment over the bus. */
+/**
+ * The public items service: admission control and routing only. Every
+ * operation is performed by the storage layer behind {@code storage} —
+ * this verticle holds no backend reference at all (MORE_VERTX ask 2).
+ */
 public class ItemsVerticle extends ServiceVerticle {
 
-  public ItemsVerticle(BusGuard guard, InventorySystem inventory) {
+  public ItemsVerticle(BusGuard guard) {
     super(BusActions.addressOf(BusActions.ITEMS_LIST), guard);
-    on(BusActions.ITEMS_LIST, env -> inventory.getAllItems().thenApply(ItemsVerticle::serialize));
-    on(BusActions.ITEMS_LIST_OF_TYPE,
-        env -> inventory.getItemsOfType(requireTarget(env)).thenApply(ItemsVerticle::serialize));
-    on(BusActions.ITEMS_GET, env -> inventory.getItem(requireTarget(env)).thenApply(o -> o.map(ItemFactory::serialize)
-        .orElseThrow(() -> BusServiceException.notFound("no such item"))));
-    on(BusActions.ITEMS_CREATE, env -> {
-      var creation = DefaultItemCreation.fromJson(env.data());
-      return inventory.actingAs(env.principal()).createItem(creation.name(), creation.displayName(), creation.type())
-          .thenApply(ItemFactory::serialize);
-    });
-    on(BusActions.ITEMS_UPDATE, env -> {
-      var update = DefaultItemUpdate.fromJson(env.data());
-      if (env.targetId().filter(t -> !t.equals(update.itemId())).isPresent())
-        throw BusServiceException.badRequest("envelope target does not match update id");
-      return inventory.actingAs(env.principal()).updateItem(update.item())
-          .thenApply(ok -> okOrNotFound(ok, "no such item", ItemFactory.serialize(update.item())));
-    });
-    on(BusActions.ITEMS_DELETE,
-        env -> inventory.actingAs(env.principal()).deleteItem(requireTarget(env)).thenApply(ok -> okOrNotFound(ok, "no such item", null)));
-    on(BusActions.ITEMS_CONTAINER_OF,
-        env -> inventory.getContainer(requireTarget(env)).thenApply(o -> o.map(ItemFactory::serialize)
-            .orElseThrow(() -> BusServiceException.notFound("item is a root, or unknown"))));
-    on(BusActions.ITEMS_COORDINATES, env -> inventory.effectiveCoordinates(requireTarget(env))
-        .thenApply(o -> o.map(c -> new io.vertx.core.json.JsonObject().put("latitude", c.latitude())
-            .put("longitude", c.longitude()))
-            .orElseThrow(() -> BusServiceException.notFound("nothing in the container chain is pinned"))));
-    on(BusActions.ITEMS_TAG, env -> {
-      var tag = io.artifexlabs.inventory.api.ItemTag.fromJson(env.data());
-      return inventory.actingAs(env.principal()).tag(requireTarget(env), tag)
-          .thenApply(ok -> okOrNotFound(ok, "no such item", null));
-    });
-    on(BusActions.ITEMS_UNTAG, env -> {
-      String key = env.data().getString("key");
-      if (key == null || key.isBlank())
-        throw BusServiceException.badRequest("items.untag requires data.key");
-      return inventory.actingAs(env.principal()).untag(requireTarget(env), key)
-          .thenApply(ok -> okOrNotFound(ok, "no such item or tag", null));
-    });
-    on(BusActions.ITEMS_FIND_BY_TAG, env -> {
-      final io.artifexlabs.inventory.api.TagQuery query;
-      try {
-        query = io.artifexlabs.inventory.api.TagQuery.fromJson(env.data());
-      } catch (IllegalArgumentException e) {
-        throw BusServiceException.badRequest(e.getMessage());
-      }
-      return inventory.findByTag(query).thenApply(ItemsVerticle::serialize);
-    });
-    on(BusActions.ITEMS_IDENTITY_ADD, env -> {
-      var identity = parseIdentity(env.data());
-      return inventory.actingAs(env.principal()).addIdentity(requireTarget(env), identity)
-          .exceptionally(e -> {
-            // a marker reused on a second item is a conflict, not a server error
-            if (unwrap(e) instanceof IllegalStateException conflict)
-              throw BusServiceException.conflict(conflict.getMessage());
-            throw sneaky(e);
-          })
-          .thenApply(ok -> okOrNotFound(ok, "no such item", null));
-    });
-    on(BusActions.ITEMS_IDENTITY_REMOVE, env -> {
-      var identity = parseIdentity(env.data());
-      return inventory.actingAs(env.principal()).removeIdentity(requireTarget(env), identity)
-          .thenApply(ok -> okOrNotFound(ok, "no such item or identity", null));
-    });
-    on(BusActions.ITEMS_FIND_BY_IDENTITY, env -> {
-      var identity = parseIdentity(env.data());
-      return inventory.findByIdentity(identity.kind(), identity.value())
-          .thenApply(o -> o.map(ItemFactory::serialize)
-              .orElseThrow(() -> BusServiceException.notFound("no item claims that identity")));
-    });
-    on(BusActions.ITEMS_IDENTITIES_OF,
-        env -> inventory.identitiesOf(requireTarget(env)).thenApply(ids -> new JsonArray(
-            ids.stream().map(io.artifexlabs.inventory.api.ItemIdentity::toJson).toList())));
-    on(BusActions.ITEMS_CONTAIN, env -> {
-      var change = DefaultContainmentChange.fromJson(env.data());
-      return inventory.actingAs(env.principal()).addToContainer(change.containerId(), change.itemId())
-          .thenApply(ok -> okOrNotFound(ok, "container or item unknown", null));
-    });
-    on(BusActions.ITEMS_UNCONTAIN, env -> {
-      var change = DefaultContainmentChange.fromJson(env.data());
-      return inventory.actingAs(env.principal()).removeFromContainer(change.containerId(), change.itemId())
-          .thenApply(ok -> okOrNotFound(ok, "container or item unknown, or not contained", null));
-    });
-    on(BusActions.ITEMS_MOVE, env -> {
-      var change = DefaultContainmentChange.fromJson(env.data());
-      return inventory.actingAs(env.principal()).moveToContainer(change.itemId(), change.containerId())
-          .thenApply(ok -> okOrNotFound(ok, "item or target container unknown", null));
-    });
-  }
-
-  private static Object serialize(List<Item> items) {
-    return new JsonArray(items.stream().map(ItemFactory::serialize).toList());
-  }
-
-  private static io.artifexlabs.inventory.api.ItemIdentity parseIdentity(io.vertx.core.json.JsonObject data) {
-    try {
-      return io.artifexlabs.inventory.api.ItemIdentity.fromJson(data);
-    } catch (IllegalArgumentException e) {
-      throw BusServiceException.badRequest(e.getMessage());
-    }
-  }
-
-  private static Throwable unwrap(Throwable e) {
-    return e instanceof java.util.concurrent.CompletionException && e.getCause() != null ? e.getCause() : e;
-  }
-
-  /** Rethrow an unexpected failure without wrapping it in a new type. */
-  private static RuntimeException sneaky(Throwable e) {
-    return e instanceof RuntimeException re ? re : new RuntimeException(e);
-  }
-
-  private static Object okOrNotFound(boolean ok, String message, Object reply) {
-    if (!ok)
-      throw BusServiceException.notFound(message);
-    return reply;
+    forward(BusActions.ITEMS_LIST,
+        BusActions.ITEMS_LIST_OF_TYPE,
+        BusActions.ITEMS_GET,
+        BusActions.ITEMS_CREATE,
+        BusActions.ITEMS_UPDATE,
+        BusActions.ITEMS_DELETE,
+        BusActions.ITEMS_CONTAINER_OF,
+        BusActions.ITEMS_COORDINATES,
+        BusActions.ITEMS_TAG,
+        BusActions.ITEMS_UNTAG,
+        BusActions.ITEMS_FIND_BY_TAG,
+        BusActions.ITEMS_IDENTITY_ADD,
+        BusActions.ITEMS_IDENTITY_REMOVE,
+        BusActions.ITEMS_FIND_BY_IDENTITY,
+        BusActions.ITEMS_IDENTITIES_OF,
+        BusActions.ITEMS_CONTAIN,
+        BusActions.ITEMS_UNCONTAIN,
+        BusActions.ITEMS_MOVE);
   }
 }

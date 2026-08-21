@@ -23,7 +23,6 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 
-import io.artifexlabs.inventory.api.AssetStore;
 import io.artifexlabs.inventory.api.CatalogEntry;
 import io.artifexlabs.inventory.api.ItemTag;
 import io.artifexlabs.inventory.api.UpcCatalog;
@@ -43,12 +42,10 @@ import io.vertx.core.json.JsonObject;
 public class CatalogVerticle extends ServiceVerticle {
 
   private final UpcCatalog catalog;
-  private final AssetStore assets;
 
-  public CatalogVerticle(BusGuard guard, UpcCatalog catalog, AssetStore assets) {
+  public CatalogVerticle(BusGuard guard, UpcCatalog catalog) {
     super(BusActions.addressOf(BusActions.CATALOG_UPC), guard);
     this.catalog = catalog;
-    this.assets = assets;
 
     on(BusActions.CATALOG_UPC, env -> {
       String gtin = requireGtin(env.data());
@@ -80,18 +77,19 @@ public class CatalogVerticle extends ServiceVerticle {
         CompletionStage<Optional<CatalogImages.Image>> image = entry == null || entry.imageUrl() == null
             ? CompletableFuture.completedStage(Optional.empty())
             : CatalogImages.fetch(entry.imageUrl());
-        return image.thenCompose(img -> this.assets.actingAs(principal)
-            .createItemFromUpc(spec,
-                img.isPresent() ? "upc-" + gtin + imageExtension(img.get().contentType()) : null,
-                img.map(CatalogImages.Image::contentType).orElse(null),
-                img.map(CatalogImages.Image::bytes).orElse(null))
-            .thenApply(o -> o.map(made -> {
-              JsonObject reply = new JsonObject()
-                  .put("item", io.artifexlabs.inventory.api.ItemFactory.serialize(made.item()));
-              if (made.asset() != null)
-                reply.put("asset", made.asset().toJson());
-              return (Object) reply;
-            }).orElseThrow(() -> BusServiceException.notFound("no such container"))));
+        // the write is one atomic storage operation; this verticle only
+         // performs the external lookup that precedes it (MORE_VERTX ask 2)
+        JsonObject specJson = new JsonObject().put("gtin13", spec.gtin13()).put("name", spec.name())
+            .put("displayName", spec.displayName()).put("type", spec.type())
+            .put("description", spec.description()).put("weightGrams", spec.weightGrams())
+            .put("containerId", spec.containerId())
+            .put("tags", new io.vertx.core.json.JsonArray(spec.tags().stream()
+                .map(io.artifexlabs.inventory.api.ItemTag::toJson).toList()));
+        return image.thenCompose(img -> storage(env, StorageVerticle.ASSETS_CREATE_FROM_UPC, null,
+            new JsonObject().put("spec", specJson)
+                .put("filename", img.isPresent() ? "upc-" + gtin + imageExtension(img.get().contentType()) : null)
+                .put("contentType", img.map(CatalogImages.Image::contentType).orElse(null))
+                .put("bytes", img.map(CatalogImages.Image::bytes).orElse(null))));
       }).exceptionally(e -> {
         Throwable cause = e instanceof java.util.concurrent.CompletionException && e.getCause() != null
             ? e.getCause()

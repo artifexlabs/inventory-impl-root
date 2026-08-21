@@ -101,7 +101,47 @@ public abstract class ServiceVerticle extends AbstractVerticle {
 
   /** The target id the action requires; 400 when the envelope lacks one. */
   protected final static String requireTarget(BusEnvelope envelope) {
-    return envelope.targetId()
-        .orElseThrow(() -> BusServiceException.badRequest(envelope.action() + " requires a targetId"));
+    return Envelopes.requireTarget(envelope);
+  }
+
+  /**
+   * Hand this envelope to the storage layer unchanged (MORE_VERTX ask 2).
+   * Admission already happened here, so the storage address is internal and
+   * unguarded; forwarding the envelope verbatim keeps the acting user and
+   * the operation intact all the way to the backing store.
+   */
+  protected final CompletionStage<Object> storage(BusEnvelope envelope) {
+    return storage(envelope.toJson());
+  }
+
+  /** Ask storage for a DIFFERENT operation on behalf of the same caller. */
+  protected final CompletionStage<Object> storage(BusEnvelope envelope, String action, String targetId,
+      JsonObject data) {
+    return storage(new DefaultBusEnvelope(envelope.version(), envelope.token(), envelope.userId(),
+        envelope.principal(), envelope.roles(), action, java.util.Optional.ofNullable(targetId),
+        data == null ? new JsonObject() : data).toJson());
+  }
+
+  private CompletionStage<Object> storage(JsonObject envelope) {
+    java.util.concurrent.CompletableFuture<Object> done = new java.util.concurrent.CompletableFuture<>();
+    this.vertx.eventBus().<Object>request(StorageVerticle.ADDRESS, envelope, reply -> {
+      if (reply.succeeded()) {
+        done.complete(reply.result().body());
+        return;
+      }
+      Throwable cause = reply.cause();
+      if (cause instanceof io.vertx.core.eventbus.ReplyException re
+          && re.failureType() == io.vertx.core.eventbus.ReplyFailure.RECIPIENT_FAILURE)
+        done.completeExceptionally(new BusServiceException(re.failureCode(), re.getMessage()));
+      else
+        done.completeExceptionally(BusServiceException.unavailable("storage is not answering"));
+    });
+    return done;
+  }
+
+  /** Register actions this verticle only guards and passes through to storage. */
+  protected final void forward(String... actions) {
+    for (String action : actions)
+      on(action, this::storage);
   }
 }

@@ -70,20 +70,22 @@ public final class BusWorkers {
       io.artifexlabs.inventory.api.events.StatusPublisher status) {
     DeploymentOptions workerThread = new DeploymentOptions().setThreadingModel(ThreadingModel.WORKER);
     Future<Void> all = Future.all(java.util.List.of(
-        vertx.deployVerticle(new ItemsVerticle(guard, s.inventory())),
-        vertx.deployVerticle(new AssetsVerticle(guard, s.assets())),
-        vertx.deployVerticle(new RegionsVerticle(guard, s.regions())),
-        vertx.deployVerticle(new AuditVerticle(guard, s.auditReader())),
-        vertx.deployVerticle(new LabelsVerticle(guard, s.inventory(), s.auditSink()), workerThread),
+        // the ONE door to storage; every public verticle forwards here
+        vertx.deployVerticle(new StorageVerticle(s, provision)),
+        vertx.deployVerticle(new ItemsVerticle(guard)),
+        vertx.deployVerticle(new AssetsVerticle(guard)),
+        vertx.deployVerticle(new RegionsVerticle(guard)),
+        vertx.deployVerticle(new AuditVerticle(guard)),
+        vertx.deployVerticle(new LabelsVerticle(guard), workerThread),
         // the printer is reached over the bus now (MORE_VERTX): it composes
         // and rasterizes, which is CPU work that must stay off the event loop
         vertx.deployVerticle(new io.artifexlabs.inventory.impl.printer.common.LabelPrinterVerticle(
             s.printer(), status, s.inventory()::getItem), workerThread),
         // catalog lookups block on external HTTP: keep them off the event loop
-        vertx.deployVerticle(new CatalogVerticle(guard, s.catalog(), s.assets()), workerThread),
-        vertx.deployVerticle(new UsersVerticle(guard, s.users(), s.auditSink())),
-        vertx.deployVerticle(new TokensVerticle(guard, s.tokens(), s.auditSink())),
-        vertx.deployVerticle(new AuthVerticle(guard, s.users(), s.tokens(), s.auditSink(), provision)),
+        vertx.deployVerticle(new CatalogVerticle(guard, s.catalog()), workerThread),
+        vertx.deployVerticle(new UsersVerticle(guard)),
+        vertx.deployVerticle(new TokensVerticle(guard)),
+        vertx.deployVerticle(new AuthVerticle(guard)),
         // the status topic's baseline consumer: never write-only (MORE_VERTX)
         vertx.deployVerticle(new StatusLogVerticle())))
         .mapEmpty();

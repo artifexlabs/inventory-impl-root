@@ -17,7 +17,6 @@
  */
 package io.artifexlabs.inventory.impl.bus;
 
-import io.artifexlabs.inventory.api.AssetStore;
 import io.artifexlabs.inventory.api.bus.BusActions;
 
 import io.vertx.core.json.JsonArray;
@@ -27,47 +26,20 @@ import io.vertx.core.json.JsonObject;
  * Asset storage over the bus. Bytes cross base64 inside the payload — bus
  * messages are fully buffered, accepted for photo-sized assets.
  */
+/**
+ * The public assets service: admission control and routing only. Every
+ * operation is performed by the storage layer behind {@code storage} —
+ * this verticle holds no backend reference at all (MORE_VERTX ask 2).
+ */
 public class AssetsVerticle extends ServiceVerticle {
 
-  public AssetsVerticle(BusGuard guard, AssetStore assets) {
+  public AssetsVerticle(BusGuard guard) {
     super(BusActions.addressOf(BusActions.ASSETS_STORE), guard);
-    on(BusActions.ASSETS_STORE, env -> {
-      var upload = DefaultAssetUpload.fromJson(env.data());
-      return assets.actingAs(env.principal())
-          .store(upload.itemId(), upload.filename(), upload.contentType(), upload.bytes(),
-              upload.coordinates().orElse(null), upload.kind())
-          .thenApply(o -> o.map(info -> info.toJson())
-              .orElseThrow(() -> BusServiceException.notFound("no such item")));
-    });
-    on(BusActions.ASSETS_CREATE_ITEM, env -> {
-      var req = DefaultPhotoItemRequest.fromJson(env.data());
-      return assets.actingAs(env.principal())
-          .createItemFromPhoto(req.name(), req.displayName(), req.type(), req.containerId(), req.filename(),
-              req.contentType(), req.bytes(), req.coordinates().orElse(null), req.kind())
-          .thenApply(o -> o
-              .map(made -> new JsonObject()
-                  .put("item", io.artifexlabs.inventory.api.ItemFactory.serialize(made.item()))
-                  .put("asset", made.asset().toJson()))
-              .orElseThrow(() -> BusServiceException.notFound("no such container")));
-    });
-    on(BusActions.ASSETS_REPLACE, env -> {
-      var content = DefaultAssetContent.fromJson(env.data());
-      return assets.actingAs(env.principal())
-          .replace(requireTarget(env), content.filename(), content.contentType(), content.bytes(),
-              content.coordinates().orElse(null))
-          .thenApply(o -> o.map(info -> info.toJson())
-              .orElseThrow(() -> BusServiceException.notFound("no such asset")));
-    });
-    on(BusActions.ASSETS_GET, env -> assets.get(requireTarget(env))
-        .thenApply(o -> o
-            .map(stored -> new JsonObject().put("info", stored.info().toJson()).put("bytes", stored.data()))
-            .orElseThrow(() -> BusServiceException.notFound("no such asset"))));
-    on(BusActions.ASSETS_LIST_FOR, env -> assets.listFor(requireTarget(env))
-        .thenApply(list -> new JsonArray(list.stream().map(i -> i.toJson()).toList())));
-    on(BusActions.ASSETS_DELETE, env -> assets.actingAs(env.principal()).delete(requireTarget(env)).thenApply(ok -> {
-      if (!ok)
-        throw BusServiceException.notFound("no such asset");
-      return null;
-    }));
+    forward(BusActions.ASSETS_STORE,
+        BusActions.ASSETS_CREATE_ITEM,
+        BusActions.ASSETS_REPLACE,
+        BusActions.ASSETS_GET,
+        BusActions.ASSETS_LIST_FOR,
+        BusActions.ASSETS_DELETE);
   }
 }

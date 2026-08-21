@@ -18,44 +18,24 @@
 package io.artifexlabs.inventory.impl.bus;
 
 import io.artifexlabs.inventory.api.ItemFactory;
-import io.artifexlabs.inventory.api.RegionSystem;
 import io.artifexlabs.inventory.api.bus.BusActions;
 
 import io.vertx.core.json.JsonArray;
 
 /** Spatial annotation over the bus: boxes on pictures and their promotion. */
+/**
+ * The public regions service: admission control and routing only. Every
+ * operation is performed by the storage layer behind {@code storage} —
+ * this verticle holds no backend reference at all (MORE_VERTX ask 2).
+ */
 public class RegionsVerticle extends ServiceVerticle {
 
-  public RegionsVerticle(BusGuard guard, RegionSystem regions) {
+  public RegionsVerticle(BusGuard guard) {
     super(BusActions.addressOf(BusActions.REGIONS_LIST), guard);
-    on(BusActions.REGIONS_LIST, env -> regions.listRegions(requireTarget(env))
-        .thenApply(list -> new JsonArray(list.stream().map(r -> r.toJson()).toList())));
-    on(BusActions.REGIONS_CREATE, env -> {
-      var box = DefaultRegionBox.fromJson(env.data());
-      return regions.actingAs(env.principal()).createRegion(box.assetId(), box.x(), box.y(), box.w(), box.h(), box.label())
-          .thenApply(o -> o.map(r -> r.toJson())
-              .orElseThrow(() -> BusServiceException.notFound("no such asset")));
-    });
-    on(BusActions.REGIONS_DELETE, env -> regions.actingAs(env.principal()).deleteRegion(requireTarget(env)).thenApply(ok -> {
-      if (!ok)
-        throw BusServiceException.notFound("no such region");
-      return null;
-    }));
-    on(BusActions.REGIONS_CREATE_ITEM, env -> {
-      var creation = DefaultRegionItemCreation.fromJson(env.data());
-      var box = creation.box();
-      return regions.actingAs(env.principal())
-          .createItemFromRegion(box.assetId(), box.x(), box.y(), box.w(), box.h(), creation.name(),
-              creation.type(), creation.containerId())
-          .thenApply(o -> o.map(ItemFactory::serialize)
-              .orElseThrow(() -> BusServiceException.notFound("no such asset or container")));
-    });
-    on(BusActions.REGIONS_MAKE_ITEM, env -> {
-      var promotion = DefaultRegionPromotion.fromJson(env.data());
-      return regions.actingAs(env.principal())
-          .makeItemFromRegion(promotion.regionId(), promotion.name(), promotion.type(), promotion.containerId())
-          .thenApply(o -> o.map(ItemFactory::serialize)
-              .orElseThrow(() -> BusServiceException.notFound("region unknown or already linked")));
-    });
+    forward(BusActions.REGIONS_LIST,
+        BusActions.REGIONS_CREATE,
+        BusActions.REGIONS_DELETE,
+        BusActions.REGIONS_CREATE_ITEM,
+        BusActions.REGIONS_MAKE_ITEM);
   }
 }

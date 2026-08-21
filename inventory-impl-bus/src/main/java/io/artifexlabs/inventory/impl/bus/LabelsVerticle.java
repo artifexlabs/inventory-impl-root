@@ -20,9 +20,7 @@ package io.artifexlabs.inventory.impl.bus;
 import java.time.Instant;
 import java.util.concurrent.CompletionStage;
 
-import io.artifexlabs.inventory.api.AuditSink;
 import io.artifexlabs.inventory.api.DefaultAuditEvent;
-import io.artifexlabs.inventory.api.InventorySystem;
 import io.artifexlabs.inventory.impl.printer.common.PrintPackets;
 import io.artifexlabs.inventory.api.bus.BusActions;
 import io.artifexlabs.inventory.impl.printer.common.QrCodes;
@@ -40,6 +38,21 @@ import io.vertx.core.json.JsonObject;
 public class LabelsVerticle extends ServiceVerticle {
 
   private final static int DEFAULT_QR_PIXELS = 300;
+
+  /** The item, from storage; storage raises 404 when it is unknown. */
+  private CompletionStage<io.artifexlabs.inventory.api.Item> item(
+      io.artifexlabs.inventory.api.bus.BusEnvelope env, String id) {
+    return storage(env, BusActions.ITEMS_GET, id, null)
+        .thenApply(json -> io.artifexlabs.inventory.api.ItemFactory.deserialize((JsonObject) json));
+  }
+
+  /** Record an audit fact THROUGH storage — this verticle holds no sink. */
+  private CompletionStage<Object> record(io.artifexlabs.inventory.api.bus.BusEnvelope env, String action,
+      String targetId, JsonObject details) {
+    return storage(env, StorageVerticle.AUDIT_RECORD, targetId,
+        io.artifexlabs.inventory.api.AuditEventFactory.serialize(
+            new DefaultAuditEvent(Ulid.next(), Instant.now(), env.principal(), action, targetId, details)));
+  }
 
   /** Hand a packet to whichever printer verticle owns the address. */
   private CompletionStage<JsonObject> send(String address, JsonObject packet) {
@@ -61,15 +74,14 @@ public class LabelsVerticle extends ServiceVerticle {
     return ack == null ? "the printer did not answer" : ack.getString("reason", "the printer refused the packet");
   }
 
-  public LabelsVerticle(BusGuard guard, InventorySystem inventory, AuditSink audit) {
+  public LabelsVerticle(BusGuard guard) {
     super(BusActions.addressOf(BusActions.LABELS_QR), guard);
     on(BusActions.LABELS_QR, env -> {
       String id = requireTarget(env);
       String url = requireUrl(env);
       int size = env.data().getInteger("size", DEFAULT_QR_PIXELS);
-      return inventory.getItem(id)
-          .thenApply(o -> o.map(i -> (Object) new JsonObject().put("png", QrCodes.png(url, size)))
-              .orElseThrow(() -> BusServiceException.notFound("no such item")));
+      // storage answers 404 itself when the item is unknown
+      return item(env, id).thenApply(i -> (Object) new JsonObject().put("png", QrCodes.png(url, size)));
     });
     on(BusActions.LABELS_PRINT, env -> {
       String id = requireTarget(env);
@@ -77,20 +89,17 @@ public class LabelsVerticle extends ServiceVerticle {
       String format = env.data().getString("format"); // null = printer default
       String principal = env.principal();
       String actor = env.userId();
-      return inventory.getItem(id).thenCompose(o -> o
-          .map(item -> send(PrintPackets.PRINT, PrintPackets.attribute(
-              PrintPackets.label(item, url, format, QrCodes.png(url, DEFAULT_QR_PIXELS)), actor, null))
-              .thenCompose(ack -> audit
-                  .record(new DefaultAuditEvent(Ulid.next(), Instant.now(), principal, "label.print", id,
-                      new JsonObject().put("accepted", accepted(ack))))
+      return item(env, id).thenCompose(item -> send(PrintPackets.PRINT, PrintPackets.attribute(
+          PrintPackets.label(item, url, format, QrCodes.png(url, DEFAULT_QR_PIXELS)), actor, null))
+              .thenCompose(ack -> record(env, "label.print", id,
+                      new JsonObject().put("accepted", accepted(ack)))
                   .thenApply(v -> {
                     // acceptance, not completion: TCP 9100 never told us more,
                     // and the outcome arrives on status.events (MORE_VERTX)
                     if (!accepted(ack))
                       throw BusServiceException.unavailable(reason(ack));
                     return (Object) new JsonObject().put("accepted", true);
-                  })))
-          .orElseThrow(() -> BusServiceException.notFound("no such item")));
+                  })));
     });
     on(BusActions.LABELS_PRINT_BATCH, env -> {
       // ONE printer job for the whole run, so continuous tape spends a
@@ -115,18 +124,16 @@ public class LabelsVerticle extends ServiceVerticle {
         String url = urls.getString(id);
         if (url == null || url.isBlank())
           throw BusServiceException.badRequest("no scan url supplied for item " + id);
-        collected = collected.thenCompose(acc -> inventory.getItem(id).thenApply(found -> {
-          acc.add(PrintPackets.label(found.orElseThrow(() -> BusServiceException.notFound("no such item: " + id)),
-              url, format, QrCodes.png(url, DEFAULT_QR_PIXELS)));
+        collected = collected.thenCompose(acc -> item(env, id).thenApply(found -> {
+          acc.add(PrintPackets.label(found, url, format, QrCodes.png(url, DEFAULT_QR_PIXELS)));
           return acc;
         }));
       }
       return collected.thenCompose(labels -> send(PrintPackets.PRINT_BATCH,
           PrintPackets.attribute(PrintPackets.batch(labels, halfCut), actor, null))
-          .thenCompose(ack -> audit
-              .record(new DefaultAuditEvent(Ulid.next(), Instant.now(), principal, "label.print-batch",
-                  "printer", new JsonObject().put("accepted", accepted(ack)).put("count", labels.size())
-                      .put("halfCut", halfCut)))
+          .thenCompose(ack -> record(env, "label.print-batch", "printer",
+                  new JsonObject().put("accepted", accepted(ack)).put("count", labels.size())
+                      .put("halfCut", halfCut))
               .thenApply(v -> {
                 if (!accepted(ack))
                   throw BusServiceException.unavailable(reason(ack));
@@ -136,9 +143,8 @@ public class LabelsVerticle extends ServiceVerticle {
     on(BusActions.LABELS_FEED, env -> {
       String principal = env.principal();
       return send(PrintPackets.FEED, PrintPackets.attribute(new JsonObject(), env.userId(), null))
-          .thenCompose(ack -> audit
-              .record(new DefaultAuditEvent(Ulid.next(), Instant.now(), principal, "label.feed", "printer",
-                  new JsonObject().put("accepted", accepted(ack))))
+          .thenCompose(ack -> record(env, "label.feed", "printer",
+                  new JsonObject().put("accepted", accepted(ack)))
               .thenApply(v -> {
                 if (!accepted(ack))
                   throw BusServiceException.unavailable(reason(ack));

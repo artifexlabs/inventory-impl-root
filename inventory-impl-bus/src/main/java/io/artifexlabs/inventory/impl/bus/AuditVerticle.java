@@ -21,7 +21,6 @@ import java.util.List;
 
 import io.artifexlabs.inventory.api.AuditEvent;
 import io.artifexlabs.inventory.api.AuditEventFactory;
-import io.artifexlabs.inventory.api.AuditReader;
 import io.artifexlabs.inventory.api.bus.BusActions;
 
 import io.vertx.core.json.JsonArray;
@@ -31,25 +30,16 @@ import io.vertx.core.json.JsonArray;
  * (enforced by the guard's action→role registry); per-target history is open
  * to any reader.
  */
+/**
+ * The public audit service: admission control and routing only. Every
+ * operation is performed by the storage layer behind {@code storage} —
+ * this verticle holds no backend reference at all (MORE_VERTX ask 2).
+ */
 public class AuditVerticle extends ServiceVerticle {
 
-  private final static int MAX_LIMIT = 200;
-
-  public AuditVerticle(BusGuard guard, AuditReader audit) {
+  public AuditVerticle(BusGuard guard) {
     super(BusActions.addressOf(BusActions.AUDIT_RECENT), guard);
-    on(BusActions.AUDIT_RECENT, env -> audit
-        .recent(clamp(env.data().getInteger("limit", 50)), Math.max(0, env.data().getInteger("offset", 0)))
-        .thenApply(AuditVerticle::serialize));
-    on(BusActions.AUDIT_BY_TARGET,
-        env -> audit.byTarget(requireTarget(env), clamp(env.data().getInteger("limit", 50)))
-            .thenApply(AuditVerticle::serialize));
-  }
-
-  private static int clamp(int limit) {
-    return Math.max(1, Math.min(limit, MAX_LIMIT));
-  }
-
-  private static Object serialize(List<AuditEvent> events) {
-    return new JsonArray(events.stream().map(AuditEventFactory::serialize).toList());
+    forward(BusActions.AUDIT_RECENT,
+        BusActions.AUDIT_BY_TARGET);
   }
 }
