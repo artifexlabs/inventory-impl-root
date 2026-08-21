@@ -58,13 +58,27 @@ public final class BusWorkers {
    * work that must not block an event loop.
    */
   public static CompletionStage<Void> deploy(Vertx vertx, BackendServices s, BusGuard guard, String provision) {
+    return deploy(vertx, s, guard, provision, new VertxStatusPublisher(vertx));
+  }
+
+  /**
+   * As {@link #deploy(Vertx, BackendServices, BusGuard, String)}, with an
+   * explicit status channel (the printer verticle reports outcomes there,
+   * since its replies are acceptance rather than completion).
+   */
+  public static CompletionStage<Void> deploy(Vertx vertx, BackendServices s, BusGuard guard, String provision,
+      io.artifexlabs.inventory.api.events.StatusPublisher status) {
     DeploymentOptions workerThread = new DeploymentOptions().setThreadingModel(ThreadingModel.WORKER);
     Future<Void> all = Future.all(java.util.List.of(
         vertx.deployVerticle(new ItemsVerticle(guard, s.inventory())),
         vertx.deployVerticle(new AssetsVerticle(guard, s.assets())),
         vertx.deployVerticle(new RegionsVerticle(guard, s.regions())),
         vertx.deployVerticle(new AuditVerticle(guard, s.auditReader())),
-        vertx.deployVerticle(new LabelsVerticle(guard, s.inventory(), s.printer(), s.auditSink()), workerThread),
+        vertx.deployVerticle(new LabelsVerticle(guard, s.inventory(), s.auditSink()), workerThread),
+        // the printer is reached over the bus now (MORE_VERTX): it composes
+        // and rasterizes, which is CPU work that must stay off the event loop
+        vertx.deployVerticle(new io.artifexlabs.inventory.impl.printer.common.LabelPrinterVerticle(
+            s.printer(), status, s.inventory()::getItem), workerThread),
         // catalog lookups block on external HTTP: keep them off the event loop
         vertx.deployVerticle(new CatalogVerticle(guard, s.catalog(), s.assets()), workerThread),
         vertx.deployVerticle(new UsersVerticle(guard, s.users(), s.auditSink())),

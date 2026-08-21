@@ -23,7 +23,7 @@ import java.util.concurrent.CompletionStage;
 import io.artifexlabs.inventory.api.AuditSink;
 import io.artifexlabs.inventory.api.DefaultAuditEvent;
 import io.artifexlabs.inventory.api.InventorySystem;
-import io.artifexlabs.inventory.api.LabelPrinter;
+import io.artifexlabs.inventory.impl.printer.common.PrintPackets;
 import io.artifexlabs.inventory.api.bus.BusActions;
 import io.artifexlabs.inventory.impl.printer.common.QrCodes;
 import io.artifexlabs.inventory.api.Ulid;
@@ -41,7 +41,27 @@ public class LabelsVerticle extends ServiceVerticle {
 
   private final static int DEFAULT_QR_PIXELS = 300;
 
-  public LabelsVerticle(BusGuard guard, InventorySystem inventory, LabelPrinter printer, AuditSink audit) {
+  /** Hand a packet to whichever printer verticle owns the address. */
+  private CompletionStage<JsonObject> send(String address, JsonObject packet) {
+    java.util.concurrent.CompletableFuture<JsonObject> done = new java.util.concurrent.CompletableFuture<>();
+    this.vertx.eventBus().<JsonObject>request(address, packet, reply -> {
+      if (reply.succeeded())
+        done.complete(reply.result().body());
+      else
+        done.completeExceptionally(BusServiceException.unavailable("no printer is listening"));
+    });
+    return done;
+  }
+
+  private static boolean accepted(JsonObject ack) {
+    return ack != null && Boolean.TRUE.equals(ack.getBoolean("accepted"));
+  }
+
+  private static String reason(JsonObject ack) {
+    return ack == null ? "the printer did not answer" : ack.getString("reason", "the printer refused the packet");
+  }
+
+  public LabelsVerticle(BusGuard guard, InventorySystem inventory, AuditSink audit) {
     super(BusActions.addressOf(BusActions.LABELS_QR), guard);
     on(BusActions.LABELS_QR, env -> {
       String id = requireTarget(env);
@@ -56,15 +76,19 @@ public class LabelsVerticle extends ServiceVerticle {
       String url = requireUrl(env);
       String format = env.data().getString("format"); // null = printer default
       String principal = env.principal();
+      String actor = env.userId();
       return inventory.getItem(id).thenCompose(o -> o
-          .map(item -> printer.printLabel(item, url, QrCodes.png(url, DEFAULT_QR_PIXELS), format)
-              .thenCompose(ok -> audit
+          .map(item -> send(PrintPackets.PRINT, PrintPackets.attribute(
+              PrintPackets.label(item, url, format, QrCodes.png(url, DEFAULT_QR_PIXELS)), actor, null))
+              .thenCompose(ack -> audit
                   .record(new DefaultAuditEvent(Ulid.next(), Instant.now(), principal, "label.print", id,
-                      new JsonObject().put("printed", ok)))
+                      new JsonObject().put("accepted", accepted(ack))))
                   .thenApply(v -> {
-                    if (!ok)
-                      throw BusServiceException.unavailable("printer refused the label");
-                    return (Object) new JsonObject().put("printed", true);
+                    // acceptance, not completion: TCP 9100 never told us more,
+                    // and the outcome arrives on status.events (MORE_VERTX)
+                    if (!accepted(ack))
+                      throw BusServiceException.unavailable(reason(ack));
+                    return (Object) new JsonObject().put("accepted", true);
                   })))
           .orElseThrow(() -> BusServiceException.notFound("no such item")));
     });
@@ -84,38 +108,42 @@ public class LabelsVerticle extends ServiceVerticle {
       String principal = env.principal();
       java.util.List<String> wanted = ids.stream().map(String::valueOf).toList();
 
-      CompletionStage<java.util.List<io.artifexlabs.inventory.api.LabelPrinter.LabelRequest>> collected =
+      String actor = env.userId();
+      CompletionStage<java.util.List<JsonObject>> collected =
           java.util.concurrent.CompletableFuture.completedStage(new java.util.ArrayList<>());
       for (String id : wanted) {
         String url = urls.getString(id);
         if (url == null || url.isBlank())
           throw BusServiceException.badRequest("no scan url supplied for item " + id);
         collected = collected.thenCompose(acc -> inventory.getItem(id).thenApply(found -> {
-          acc.add(new io.artifexlabs.inventory.api.LabelPrinter.LabelRequest(
-              found.orElseThrow(() -> BusServiceException.notFound("no such item: " + id)), url,
-              QrCodes.png(url, DEFAULT_QR_PIXELS), format));
+          acc.add(PrintPackets.label(found.orElseThrow(() -> BusServiceException.notFound("no such item: " + id)),
+              url, format, QrCodes.png(url, DEFAULT_QR_PIXELS)));
           return acc;
         }));
       }
-      return collected.thenCompose(reqs -> printer.printBatch(reqs, halfCut).thenCompose(ok -> audit
-          .record(new DefaultAuditEvent(Ulid.next(), Instant.now(), principal, "label.print-batch",
-              "printer", new JsonObject().put("printed", ok).put("count", reqs.size()).put("halfCut", halfCut)))
-          .thenApply(v -> {
-            if (!ok)
-              throw BusServiceException.unavailable("printer refused the batch");
-            return (Object) new JsonObject().put("printed", true).put("count", reqs.size());
-          })));
+      return collected.thenCompose(labels -> send(PrintPackets.PRINT_BATCH,
+          PrintPackets.attribute(PrintPackets.batch(labels, halfCut), actor, null))
+          .thenCompose(ack -> audit
+              .record(new DefaultAuditEvent(Ulid.next(), Instant.now(), principal, "label.print-batch",
+                  "printer", new JsonObject().put("accepted", accepted(ack)).put("count", labels.size())
+                      .put("halfCut", halfCut)))
+              .thenApply(v -> {
+                if (!accepted(ack))
+                  throw BusServiceException.unavailable(reason(ack));
+                return (Object) new JsonObject().put("accepted", true).put("count", labels.size());
+              })));
     });
     on(BusActions.LABELS_FEED, env -> {
       String principal = env.principal();
-      return printer.feed().thenCompose(ok -> audit
-          .record(new DefaultAuditEvent(Ulid.next(), Instant.now(), principal, "label.feed", "printer",
-              new JsonObject().put("fed", ok)))
-          .thenApply(v -> {
-            if (!ok)
-              throw BusServiceException.unavailable("printer cannot extend the tape");
-            return (Object) new JsonObject().put("fed", true);
-          }));
+      return send(PrintPackets.FEED, PrintPackets.attribute(new JsonObject(), env.userId(), null))
+          .thenCompose(ack -> audit
+              .record(new DefaultAuditEvent(Ulid.next(), Instant.now(), principal, "label.feed", "printer",
+                  new JsonObject().put("accepted", accepted(ack))))
+              .thenApply(v -> {
+                if (!accepted(ack))
+                  throw BusServiceException.unavailable(reason(ack));
+                return (Object) new JsonObject().put("accepted", true);
+              }));
     });
   }
 

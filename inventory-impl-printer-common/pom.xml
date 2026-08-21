@@ -33,6 +33,15 @@
     Deliberately dependency-free — pure JDK.</description>
   <dependencies>
     <dependency>
+      <!-- printing is reached over the event bus (MORE_VERTX step 4) -->
+      <groupId>io.artifexlabs.inventory</groupId>
+      <artifactId>inventory-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-core</artifactId>
+    </dependency>
+    <dependency>
       <!-- QrCodes renders the module-exact matrices label layouts consume -->
       <groupId>com.google.zxing</groupId>
       <artifactId>core</artifactId>
