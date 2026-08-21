@@ -1,0 +1,25 @@
+# inventory-migrate: the versioned schema as a runnable migration
+# (MAVEN_RELEASES.md step 4 — changelog-from-jar).
+#
+# The Liquibase image adds every jar in /liquibase/lib to its classpath, and
+# Liquibase resolves --changelog-file against the classpath — so shipping the
+# inventory-impl-changeset jar IS the delivery mechanism: no bind mounts, no
+# node checkouts, no hand-copied ConfigMaps. Build after the module builds
+# (the jar must exist in target/):
+#
+#   docker build -f src/main/docker/Dockerfile.migrate -t inventory-migrate .
+#
+# Run exactly like the raw Liquibase CLI, minus any --search-path:
+#
+#   docker run --rm inventory-migrate \
+#     --url=jdbc:postgresql://host:5432/inventory \
+#     --username=inventory --password=... \
+#     --changelog-file=db/changelog-master.yaml update
+# the build also attaches a -tests jar; a COPY wildcard with two matches and
+# one destination is last-wins luck — pick the real jar in a scratch stage
+FROM busybox:1.36 AS pick
+COPY target/inventory-impl-changeset-*.jar /staged/
+RUN rm -f /staged/*-tests.jar && mv /staged/inventory-impl-changeset-*.jar /staged/inventory-impl-changeset.jar
+
+FROM liquibase/liquibase:4.29
+COPY --from=pick /staged/inventory-impl-changeset.jar /liquibase/lib/inventory-impl-changeset.jar
