@@ -36,6 +36,23 @@
     memory/Pg parity tests run in a single reactor pass here — artifact
     separation without version separation (MAVEN_RELEASES.md).</description>
   <url>${github.url.base}/${project.artifactId}</url>
+  <properties>
+    <!-- The one cross-repo dependency of this train. inventory-parent no
+         longer manages inventory-family versions (Central rejects SNAPSHOT
+         dependencyManagement in released poms), so the train pins its own
+         api. PER-RELEASE: bump this to api's RELEASED version before
+         release:prepare — api releases ahead of this aggregator. -->
+    <inventory.api.version>0.1.0-SNAPSHOT</inventory.api.version>
+  </properties>
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>io.artifexlabs.inventory</groupId>
+        <artifactId>inventory-api</artifactId>
+        <version>${inventory.api.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
   <scm>
     <connection>scm:git:${git.url}</connection>
     <url>scm:git:${git.url}</url>
