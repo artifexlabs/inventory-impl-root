@@ -24,7 +24,7 @@
   <parent>
     <groupId>io.artifexlabs.inventory</groupId>
     <artifactId>inventory-impl-root</artifactId>
-    <version>0.1.0</version>
+    <version>0.1.1-SNAPSHOT</version>
   </parent>
 
   <artifactId>inventory-impl</artifactId>
@@ -39,7 +39,7 @@
     <connection>scm:git:${git.url}</connection>
     <url>scm:git:${git.url}</url>
     <developerConnection>scm:git:${git.url}</developerConnection>
-    <tag>v0.1.0</tag>
+    <tag>HEAD</tag>
   </scm>
   <distributionManagement>
     <site>
