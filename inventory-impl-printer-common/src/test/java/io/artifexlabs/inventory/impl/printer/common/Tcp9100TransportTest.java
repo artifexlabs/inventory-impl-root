@@ -15,7 +15,7 @@
  * limitations under the License.
  * @formatter:on
  */
-package io.artifexlabs.inventory.impl;
+package io.artifexlabs.inventory.impl.printer.common;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;

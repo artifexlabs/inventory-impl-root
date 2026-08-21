@@ -17,6 +17,9 @@
  */
 package io.artifexlabs.inventory.impl;
 
+import io.artifexlabs.inventory.impl.printer.common.LabelComposer;
+import io.artifexlabs.inventory.impl.printer.common.Tcp9100Transport;
+
 import java.awt.image.BufferedImage;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -62,22 +65,13 @@ public class BrotherPTouchPrinter implements LabelPrinter {
   private final static int MIN_DOTS_PER_MODULE = 2;
   /** Tapes with fewer printable dots than this go QR-only (text is unreadable there). */
   private final static int MIN_TEXT_DOTS = 100;
-  // Named Brother formats (item 11 rework, 2026-08-21): like the Zebra
-  // formats, each name is a specific layout — and here also a specific tape,
-  // refused when the loaded width differs (a mismatched raster prints
-  // garbage; refusal beats wasted stock).
-  /** Legacy force-flag: the QR-only layout on ANY tape width. */
-  final static String FORMAT_QR_ONLY = "qr-only";
-  /** 9mm: just the bare-ULID code — always the id, never a URL. */
-  final static String FORMAT_9MM_ID_ONLY = "9mm-id-only";
-  /** 12mm: just the code, full-URL payload (v3 at 2 dots/module). */
-  final static String FORMAT_12MM_QR = "12mm-qr";
-  /** 12mm: compact strip — QR + name + printed date + weight + bold H when heavy. */
-  final static String FORMAT_12MM = "12mm";
-  /** 24mm: the QR + name/id text layout (same as automatic on wide tape). */
-  final static String FORMAT_24MM = "24mm";
-  private final static String KNOWN_FORMATS = String.join(", ", FORMAT_9MM_ID_ONLY, FORMAT_12MM_QR, FORMAT_12MM,
-      FORMAT_24MM, FORMAT_QR_ONLY);
+  // This printer's slice of the LabelPrinter.FORMAT_* vocabulary (item 11
+  // rework, 2026-08-21): the semantic names map onto tape widths here —
+  // standard/standard-qr = 12 mm, large = 24 mm, tiny = 9 mm — and refuse
+  // when the loaded width differs (a mismatched raster prints garbage;
+  // refusal beats wasted stock). FORMAT_QR_ONLY alone is width-independent.
+  private final static String KNOWN_FORMATS = String.join(", ", FORMAT_TINY, FORMAT_STANDARD_QR_ONLY,
+      FORMAT_STANDARD, FORMAT_LARGE, FORMAT_QR_ONLY);
 
   private final LabelComposer composer = new LabelComposer();
   private final BrotherRasterEncoder encoder = new BrotherRasterEncoder();
@@ -178,10 +172,10 @@ public class BrotherPTouchPrinter implements LabelPrinter {
     }
     return switch (format) {
       case FORMAT_QR_ONLY -> composeQrOnly(item, scanUrl);
-      case FORMAT_9MM_ID_ONLY -> tapeIs(9, format, item) ? composeQrOnly(item, null) : null;
-      case FORMAT_12MM_QR -> tapeIs(12, format, item) ? composeQrOnly(item, scanUrl) : null;
-      case FORMAT_12MM -> tapeIs(12, format, item) ? composeCompact(item, scanUrl) : null;
-      case FORMAT_24MM -> tapeIs(24, format, item) ? composeNameId(item, scanUrl) : null;
+      case FORMAT_TINY -> tapeIs(9, format, item) ? composeQrOnly(item, null) : null;
+      case FORMAT_STANDARD_QR_ONLY -> tapeIs(12, format, item) ? composeQrOnly(item, scanUrl) : null;
+      case FORMAT_STANDARD -> tapeIs(12, format, item) ? composeCompact(item, scanUrl) : null;
+      case FORMAT_LARGE -> tapeIs(24, format, item) ? composeNameId(item, scanUrl) : null;
       default -> {
         log.warn("Unknown label format {} for item {} (know [{}])", format, item.getId(), KNOWN_FORMATS);
         yield null;

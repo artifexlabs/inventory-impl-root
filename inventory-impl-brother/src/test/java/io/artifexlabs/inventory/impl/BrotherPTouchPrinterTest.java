@@ -211,45 +211,45 @@ public class BrotherPTouchPrinterTest {
   }
 
   @Test
-  public void namedNineMmIdOnlyPrintsTheBareUlidCode() throws Exception {
+  public void namedTinyPrintsTheBareUlidCode() throws Exception {
     try (ServerSocket fake = new ServerSocket(0)) {
       // same geometry as 9mm automatic: 25-module ULID code at 2 dpm + margin
       BrotherPTouchPrinter printer = new BrotherPTouchPrinter("localhost", fake.getLocalPort(), 9);
-      byte[] bytes = capture(fake, printer.printLabel(item(), SCAN_URL, qrPng(), "9mm-id-only"));
-      assertEquals(54, rasterLines(bytes), "id-only: the ULID even though a URL was offered");
+      byte[] bytes = capture(fake, printer.printLabel(item(), SCAN_URL, qrPng(), "tiny"));
+      assertEquals(54, rasterLines(bytes), "tiny: the bare ULID even though a URL was offered");
     }
   }
 
   @Test
-  public void namedTwelveMmQrPrintsTheUrlCode() throws Exception {
+  public void namedStandardQrPrintsTheUrlCode() throws Exception {
     try (ServerSocket fake = new ServerSocket(0)) {
       BrotherPTouchPrinter printer = new BrotherPTouchPrinter("localhost", fake.getLocalPort(), 12);
-      byte[] bytes = capture(fake, printer.printLabel(item(), SCAN_URL, qrPng(), "12mm-qr"));
+      byte[] bytes = capture(fake, printer.printLabel(item(), SCAN_URL, qrPng(), "standard-qr"));
       assertEquals(62, rasterLines(bytes), "29-module URL code at 2 dots/module plus margin");
     }
   }
 
   @Test
-  public void namedTwentyFourMmMatchesTheAutomaticWideLayout() throws Exception {
+  public void namedLargeMatchesTheAutomaticWideLayout() throws Exception {
     try (ServerSocket fake = new ServerSocket(0)) {
       BrotherPTouchPrinter printer = new BrotherPTouchPrinter("localhost", fake.getLocalPort(), 24);
       byte[] auto = capture(fake, printer.printLabel(item(), SCAN_URL, qrPng(), null));
-      byte[] named = capture(fake, printer.printLabel(item(), SCAN_URL, qrPng(), "24mm"));
-      assertEquals(rasterLines(auto), rasterLines(named), "'24mm' IS the automatic wide layout, by name");
+      byte[] named = capture(fake, printer.printLabel(item(), SCAN_URL, qrPng(), "large"));
+      assertEquals(rasterLines(auto), rasterLines(named), "'large' IS the automatic wide layout, by name");
     }
   }
 
   @Test
-  public void namedTwelveMmCompactStripCarriesTextBesideTheCode() throws Exception {
+  public void namedStandardCompactStripCarriesTextBesideTheCode() throws Exception {
     try (ServerSocket fake = new ServerSocket(0)) {
       BrotherPTouchPrinter printer = new BrotherPTouchPrinter("localhost", fake.getLocalPort(), 12);
-      byte[] plain = capture(fake, printer.printLabel(item(), SCAN_URL, qrPng(), "12mm"));
+      byte[] plain = capture(fake, printer.printLabel(item(), SCAN_URL, qrPng(), "standard"));
       assertTrue(rasterLines(plain) > 62, "the strip is wider than the bare 62-line code");
 
       var loaded = io.artifexlabs.inventory.api.DefaultItem.builder().id("01ARZ3NDEKTSV4RRFFQ69G5FAV")
           .name("smoke-item").type("tool").timestamp(java.time.Instant.parse("2026-08-09T00:00:00Z"))
           .weight(new io.artifexlabs.inventory.api.Weight(1500)).heavy(true).build();
-      byte[] full = capture(fake, printer.printLabel(loaded, SCAN_URL, qrPng(), "12mm"));
+      byte[] full = capture(fake, printer.printLabel(loaded, SCAN_URL, qrPng(), "standard"));
       assertTrue(rasterLines(full) > rasterLines(plain), "weight line and the H mark widen the strip");
     }
   }
@@ -257,7 +257,7 @@ public class BrotherPTouchPrinterTest {
   @Test
   public void namedFormatRefusesMismatchedTapeWithoutTouchingThePrinter() throws Exception {
     try (ServerSocket fake = new ServerSocket(0)) {
-      // 24mm is loaded; every 9/12mm named format must refuse, not misprint
+      // 24mm is loaded; every 9/12mm-bound name must refuse, not misprint
       BrotherPTouchPrinter printer = new BrotherPTouchPrinter("localhost", fake.getLocalPort(), 24);
       CompletableFuture<byte[]> received = CompletableFuture.supplyAsync(() -> {
         try (var socket = fake.accept()) {
@@ -266,9 +266,9 @@ public class BrotherPTouchPrinterTest {
           throw new RuntimeException(e);
         }
       });
-      assertFalse(printer.printLabel(item(), SCAN_URL, qrPng(), "12mm").toCompletableFuture().get());
-      assertFalse(printer.printLabel(item(), SCAN_URL, qrPng(), "12mm-qr").toCompletableFuture().get());
-      assertFalse(printer.printLabel(item(), SCAN_URL, qrPng(), "9mm-id-only").toCompletableFuture().get());
+      assertFalse(printer.printLabel(item(), SCAN_URL, qrPng(), "standard").toCompletableFuture().get());
+      assertFalse(printer.printLabel(item(), SCAN_URL, qrPng(), "standard-qr").toCompletableFuture().get());
+      assertFalse(printer.printLabel(item(), SCAN_URL, qrPng(), "tiny").toCompletableFuture().get());
       assertFalse(received.isDone(), "nothing was sent to the printer");
     }
   }
@@ -284,7 +284,7 @@ public class BrotherPTouchPrinterTest {
           throw new RuntimeException(e);
         }
       });
-      // Zebra format names mean nothing here and must refuse loudly
+      // names outside this printer's slice (x-large is Zebra-only) refuse loudly
       assertFalse(printer.printLabel(item(), SCAN_URL, qrPng(), "x-large").toCompletableFuture().get());
       assertFalse(received.isDone(), "nothing was sent to the printer");
     }

@@ -17,6 +17,9 @@
  */
 package io.artifexlabs.inventory.impl;
 
+import io.artifexlabs.inventory.impl.printer.common.LabelComposer;
+import io.artifexlabs.inventory.impl.printer.common.Tcp9100Transport;
+
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.time.LocalDate;
@@ -52,11 +55,12 @@ public class ZebraPrinter implements LabelPrinter {
    * format name -> media geometry: standard 2.25×1.25 in, large 2.25×4 in,
    * x-large 4×4 in, 2x-large 4×6.5 in (all @203 dpi).
    */
+  // keyed by the LabelPrinter.FORMAT_* names (shared caller vocabulary)
   private final static Map<String, Geometry> FORMATS = Map.of(
-      "standard", new Geometry(457, 254),
-      "large", new Geometry(457, 812),
-      "x-large", new Geometry(812, 812),
-      "2x-large", new Geometry(812, 1320));
+      FORMAT_STANDARD, new Geometry(457, 254),
+      FORMAT_LARGE, new Geometry(457, 812),
+      FORMAT_X_LARGE, new Geometry(812, 812),
+      FORMAT_2X_LARGE, new Geometry(812, 1320));
 
   private final LabelComposer composer = new LabelComposer();
   private final ZplEncoder encoder = new ZplEncoder();
@@ -104,14 +108,14 @@ public class ZebraPrinter implements LabelPrinter {
         boolean absolute = item.getExpiration().map(io.artifexlabs.inventory.api.Expiration::absolute)
             .orElse(false);
         BufferedImage label = switch (chosen) {
-        case "large" -> this.composer.composeLarge(name, item.getId(), item.getType(),
+        case FORMAT_LARGE -> this.composer.composeLarge(name, item.getId(), item.getType(),
             item.getQuantity().orElse(null), locName.orElse(null), item.isHeavy(), expiresOn, absolute,
             item.getDescription().orElse(null), LocalDate.now().toString(), qr, geometry.width(),
             geometry.height());
-        case "x-large" -> this.composer.composeXLarge(name, item.getId(), item.getType(),
+        case FORMAT_X_LARGE -> this.composer.composeXLarge(name, item.getId(), item.getType(),
             item.getQuantity().orElse(null), locName.orElse(null), item.isHeavy(), expiresOn, absolute,
             LocalDate.now().toString(), qr, geometry.width(), geometry.height());
-        case "2x-large" -> this.composer.compose2xLarge(name, item.getId(), item.getType(),
+        case FORMAT_2X_LARGE -> this.composer.compose2xLarge(name, item.getId(), item.getType(),
             item.getQuantity().orElse(null), locName.orElse(null), item.isHeavy(), expiresOn, absolute,
             coordinatesLine(item), tagsLine(item), item.getDescription().orElse(null),
             LocalDate.now().toString(), qr, geometry.width(), geometry.height());

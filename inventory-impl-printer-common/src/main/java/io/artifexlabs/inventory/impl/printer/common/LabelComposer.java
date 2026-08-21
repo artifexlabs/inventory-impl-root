@@ -15,7 +15,7 @@
  * limitations under the License.
  * @formatter:on
  */
-package io.artifexlabs.inventory.impl;
+package io.artifexlabs.inventory.impl.printer.common;
 
 import java.awt.Font;
 import java.awt.Graphics2D;

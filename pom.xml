@@ -66,8 +66,11 @@
     </site>
   </distributionManagement>
   <modules>
+    <module>inventory-impl-printer-common</module>
     <module>inventory-impl</module>
     <module>inventory-impl-changeset</module>
+    <module>inventory-impl-brother</module>
+    <module>inventory-impl-zebra</module>
     <module>inventory-impl-pg</module>
   </modules>
 </project>
