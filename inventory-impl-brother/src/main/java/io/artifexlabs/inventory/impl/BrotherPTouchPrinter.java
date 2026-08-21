@@ -17,6 +17,8 @@
  */
 package io.artifexlabs.inventory.impl;
 
+import io.artifexlabs.inventory.impl.printer.common.QrCodes;
+
 import io.artifexlabs.inventory.api.events.StatusEvent;
 import io.artifexlabs.inventory.api.events.StatusPublisher;
 import io.artifexlabs.inventory.impl.printer.common.LabelComposer;

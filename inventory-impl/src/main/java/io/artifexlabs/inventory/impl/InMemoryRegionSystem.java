@@ -17,6 +17,8 @@
  */
 package io.artifexlabs.inventory.impl;
 
+import io.artifexlabs.inventory.api.Ulid;
+
 import static java.util.Objects.requireNonNull;
 
 import java.time.Instant;

@@ -24,7 +24,7 @@ import java.time.Instant;
 import io.artifexlabs.inventory.api.events.StatusEvent;
 import io.artifexlabs.inventory.api.events.StatusEvents;
 import io.artifexlabs.inventory.api.events.StatusPublisher;
-import io.artifexlabs.inventory.impl.Ulid;
+import io.artifexlabs.inventory.api.Ulid;
 
 import io.vertx.core.Vertx;
 import io.vertx.core.json.JsonObject;

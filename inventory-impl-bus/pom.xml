@@ -25,21 +25,27 @@
     <artifactId>inventory-impl-root</artifactId>
     <version>0.1.0-SNAPSHOT</version>
   </parent>
-  <artifactId>inventory-impl-printer-common</artifactId>
+  <artifactId>inventory-impl-bus</artifactId>
   <name>${project.artifactId}</name>
-  <description>Printer plumbing every vendor shares: LabelComposer (all label
-    layouts as pure image-composition functions) and Tcp9100Transport (the
-    JetDirect/port-9100 wire both the Brother and networked Zebras speak).
-    Deliberately dependency-free — pure JDK.</description>
+  <description>The event-bus layer: every worker verticle, the admission
+    guard, the envelope wire types, and the publishers. Depends on the API
+    contracts, Vert.x, and the label-rendering plumbing — and deliberately
+    NOT on any domain implementation, so the build itself enforces that the
+    protocol layer cannot see Postgres from memory (MORE_VERTX).</description>
   <dependencies>
     <dependency>
-      <!-- QrCodes renders the module-exact matrices label layouts consume -->
-      <groupId>com.google.zxing</groupId>
-      <artifactId>core</artifactId>
+      <groupId>io.artifexlabs.inventory</groupId>
+      <artifactId>inventory-api</artifactId>
     </dependency>
     <dependency>
-      <groupId>com.google.zxing</groupId>
-      <artifactId>javase</artifactId>
+      <!-- QrCodes: the labels worker renders the code the printer prints -->
+      <groupId>io.artifexlabs.inventory</groupId>
+      <artifactId>inventory-impl-printer-common</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>io.vertx</groupId>
+      <artifactId>vertx-core</artifactId>
     </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>

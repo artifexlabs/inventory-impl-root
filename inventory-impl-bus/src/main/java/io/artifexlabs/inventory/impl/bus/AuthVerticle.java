@@ -28,8 +28,8 @@ import io.artifexlabs.inventory.api.InventoryUser;
 import io.artifexlabs.inventory.api.TokenService;
 import io.artifexlabs.inventory.api.UserFactory;
 import io.artifexlabs.inventory.api.bus.BusActions;
-import io.artifexlabs.inventory.impl.Ulid;
-import io.artifexlabs.inventory.impl.UserStore;
+import io.artifexlabs.inventory.api.Ulid;
+import io.artifexlabs.inventory.api.UserStore;
 
 import io.vertx.core.json.JsonObject;
 

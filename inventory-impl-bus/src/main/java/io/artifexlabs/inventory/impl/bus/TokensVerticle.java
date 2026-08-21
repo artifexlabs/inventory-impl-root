@@ -23,7 +23,7 @@ import io.artifexlabs.inventory.api.AuditSink;
 import io.artifexlabs.inventory.api.DefaultAuditEvent;
 import io.artifexlabs.inventory.api.TokenService;
 import io.artifexlabs.inventory.api.bus.BusActions;
-import io.artifexlabs.inventory.impl.Ulid;
+import io.artifexlabs.inventory.api.Ulid;
 
 import io.vertx.core.json.JsonArray;
 

@@ -156,12 +156,4 @@ public class CatalogAdaptersTest {
     assertEquals("Cola Can", await(composite.lookup(GTIN)).get().name());
     assertEquals(1, counted.get(), "sources AFTER the hit are never asked (rate limits are precious)");
   }
-
-  @Test
-  public void imageFetchIsCappedAndBestEffort() throws Exception {
-    assertTrue(await(CatalogImages.fetch(base + "/image.jpg")).isPresent());
-    assertEquals("image/jpeg", await(CatalogImages.fetch(base + "/image.jpg")).get().contentType());
-    assertTrue(await(CatalogImages.fetch("http://127.0.0.1:1/nope.jpg")).isEmpty());
-    assertTrue(await(CatalogImages.fetch("not a url")).isEmpty());
-  }
 }

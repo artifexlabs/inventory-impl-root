@@ -27,7 +27,7 @@ import io.artifexlabs.inventory.api.InventorySystem;
 import io.artifexlabs.inventory.api.LabelPrinter;
 import io.artifexlabs.inventory.api.RegionSystem;
 import io.artifexlabs.inventory.api.TokenService;
-import io.artifexlabs.inventory.impl.UserStore;
+import io.artifexlabs.inventory.api.UserStore;
 
 import io.vertx.core.DeploymentOptions;
 import io.vertx.core.Future;

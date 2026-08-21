@@ -15,7 +15,7 @@
  * limitations under the License.
  * @formatter:on
  */
-package io.artifexlabs.inventory.impl.catalog;
+package io.artifexlabs.inventory.impl.bus;
 
 import java.net.URI;
 import java.net.http.HttpClient;

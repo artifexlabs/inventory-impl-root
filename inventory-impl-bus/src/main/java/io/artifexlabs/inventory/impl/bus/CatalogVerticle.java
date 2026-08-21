@@ -29,8 +29,7 @@ import io.artifexlabs.inventory.api.ItemTag;
 import io.artifexlabs.inventory.api.UpcCatalog;
 import io.artifexlabs.inventory.api.UpcItemCreation;
 import io.artifexlabs.inventory.api.bus.BusActions;
-import io.artifexlabs.inventory.impl.Gtin;
-import io.artifexlabs.inventory.impl.catalog.CatalogImages;
+import io.artifexlabs.inventory.api.Gtin;
 
 import io.vertx.core.json.JsonObject;
 

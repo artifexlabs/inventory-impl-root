@@ -25,8 +25,8 @@ import io.artifexlabs.inventory.api.DefaultAuditEvent;
 import io.artifexlabs.inventory.api.InventorySystem;
 import io.artifexlabs.inventory.api.LabelPrinter;
 import io.artifexlabs.inventory.api.bus.BusActions;
-import io.artifexlabs.inventory.impl.QrCodes;
-import io.artifexlabs.inventory.impl.Ulid;
+import io.artifexlabs.inventory.impl.printer.common.QrCodes;
+import io.artifexlabs.inventory.api.Ulid;
 
 import io.vertx.core.json.JsonObject;
 
