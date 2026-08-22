@@ -81,4 +81,22 @@
       </dependency>
     </dependencies>
   </dependencyManagement>
+
+  <build>
+    <plugins>
+      <plugin><!-- The central plugin buffers every module's artifacts and uploads
+             ONE bundle during the LAST project in the reactor — which is
+             inventory-impl-pg, since dependency order sorts it last. The
+             inherited deploymentName is ${project.artifactId}-${project.version},
+             so the portal labelled the whole train "inventory-impl-pg".
+             Naming it here (and inheriting to the children) makes the
+             deployment read as what it actually is. -->
+        <groupId>org.sonatype.central</groupId>
+        <artifactId>central-publishing-maven-plugin</artifactId>
+        <configuration>
+          <deploymentName>inventory-impl-root-${project.version}</deploymentName>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
 </project>
