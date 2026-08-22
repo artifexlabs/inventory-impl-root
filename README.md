@@ -17,7 +17,7 @@ Postgres depend on `inventory-impl-pg` (core and the changelog arrive
 transitively); memory-only consumers depend on `inventory-impl`;
 migration tooling can depend on `inventory-impl-changeset` alone.
 
-Part of the inventory workspace — see `MAVEN_RELEASES.md` in
+Part of the inventory workspace — see PLAN.md Phase 19 in
 [inventory-root](https://github.com/mykelalvis/inventory-root) for the
 extraction/release plan, and `PLAN.md` there for project history.
 
