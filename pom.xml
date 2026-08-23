@@ -69,7 +69,7 @@
          dependencyManagement in released poms), so the train pins its own
          api. PER-RELEASE: bump this to api's RELEASED version before
          release:prepare — api releases ahead of this aggregator. -->
-    <inventory.api.version>0.2.0-SNAPSHOT</inventory.api.version>
+    <inventory.api.version>0.2.0</inventory.api.version>
   </properties>
 
   <dependencyManagement>
