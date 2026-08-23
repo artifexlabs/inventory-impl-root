@@ -21,6 +21,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import io.artifexlabs.inventory.api.Ulid;
 import io.artifexlabs.inventory.api.bus.BusEnvelope;
 
 import io.vertx.core.json.JsonArray;
@@ -35,15 +36,17 @@ import io.vertx.core.json.JsonObject;
  * says. Within the fabric's trust model (cluster membership is the only entry point), an admitted envelope's identity
  * and payload are therefore fixed for its lifetime. The extra copies are an accepted cost of that guarantee.
  */
-public record DefaultBusEnvelope(int version, String token, String userId, String principal, Set<String> roles,
-    String action, Optional<String> targetId, JsonObject data) implements BusEnvelope {
+public record DefaultBusEnvelope(int version, String token, String requestId, String userId, String principal,
+    Set<String> roles, String action, Optional<String> targetId, JsonObject data) implements BusEnvelope {
 
   /** Envelope schema version this build writes. */
-  public final static int VERSION = 1;
+  public final static int VERSION = 2;
 
   public DefaultBusEnvelope {
     if (token == null || token.isBlank())
       throw new IllegalArgumentException("envelope requires the fabric token");
+    if (requestId == null || requestId.isBlank())
+      throw new IllegalArgumentException("envelope requires a request id");
     if (action == null || action.isBlank())
       throw new IllegalArgumentException("envelope requires an action");
     if (userId == null)
@@ -55,6 +58,12 @@ public record DefaultBusEnvelope(int version, String token, String userId, Strin
     data = data == null ? new JsonObject() : data.copy();
   }
 
+  /** A fresh envelope for work this service originates itself. */
+  public static DefaultBusEnvelope originating(String token, String userId, String principal, Set<String> roles,
+      String action, Optional<String> targetId, JsonObject data) {
+    return new DefaultBusEnvelope(VERSION, token, Ulid.next(), userId, principal, roles, action, targetId, data);
+  }
+
   /** Defensive copy: mutating the returned object never alters the envelope. */
   @Override
   public JsonObject data() {
@@ -63,18 +72,23 @@ public record DefaultBusEnvelope(int version, String token, String userId, Strin
 
   @Override
   public JsonObject toJson() {
-    JsonObject j = new JsonObject().put("v", this.version).put("token", this.token).put("userId", this.userId)
-        .put("principal", this.principal).put("roles", new JsonArray(this.roles.stream().sorted().toList()))
-        .put("action", this.action).put("data", this.data.copy());
+    JsonObject j = new JsonObject().put("v", this.version).put("token", this.token).put("requestId", this.requestId)
+        .put("userId", this.userId).put("principal", this.principal)
+        .put("roles", new JsonArray(this.roles.stream().sorted().toList())).put("action", this.action)
+        .put("data", this.data.copy());
     this.targetId.ifPresent(t -> j.put("targetId", t));
     return j;
   }
 
+  /**
+   * Read a wire envelope. A body without a {@code requestId} is REFUSED rather than given a minted one: admission turns
+   * that into a 400, and a fabricated correlation would claim a link to a cause we never saw.
+   */
   public static DefaultBusEnvelope fromJson(JsonObject j) {
     Set<String> roles = j.getJsonArray("roles", new JsonArray()).stream().map(String::valueOf)
         .collect(Collectors.toSet());
-    return new DefaultBusEnvelope(j.getInteger("v", 0), j.getString("token"), j.getString("userId", ""),
-        j.getString("principal"), roles, j.getString("action"), Optional.ofNullable(j.getString("targetId")),
-        j.getJsonObject("data", new JsonObject()));
+    return new DefaultBusEnvelope(j.getInteger("v", 0), j.getString("token"), j.getString("requestId"),
+        j.getString("userId", ""), j.getString("principal"), roles, j.getString("action"),
+        Optional.ofNullable(j.getString("targetId")), j.getJsonObject("data", new JsonObject()));
   }
 }

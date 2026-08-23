@@ -17,16 +17,17 @@
  */
 package io.artifexlabs.inventory.impl;
 
-import io.artifexlabs.inventory.impl.tck.InventorySystemTck;
+import io.artifexlabs.inventory.impl.tck.DataSystemTck;
 
 /**
  * The in-memory backend against the parity kit. A fresh store per test comes free: new objects.
  */
-public class InMemoryInventorySystemTest extends InventorySystemTck {
+public class InMemoryDataSystemTest extends DataSystemTck {
 
   @Override
-  protected Backend backend() {
+  protected Backends backends() {
     InMemoryAuditSink audit = new InMemoryAuditSink();
-    return new Backend(new InMemoryInventorySystem(audit, PRINCIPAL), audit::getEvents);
+    InMemoryInventorySystem items = new InMemoryInventorySystem(audit, "tester@example.com");
+    return new Backends(items, new InMemoryDataSystem(items, audit, "tester@example.com"), audit);
   }
 }

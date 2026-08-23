@@ -15,3 +15,7 @@ databaseChangeLog:
   # Ongoing item 7 (2026-08-15): physical markers (NFC/UPC/QR) -> item
   - include:
       file: db/changeset/005-item-identities.yaml
+  # Ongoing item 6 (2026-08-22): what files are on a data medium — manifests
+  # with dictionary-encoded paths/mime types, content and path hashes
+  - include:
+      file: db/changeset/006-data-manifest.yaml

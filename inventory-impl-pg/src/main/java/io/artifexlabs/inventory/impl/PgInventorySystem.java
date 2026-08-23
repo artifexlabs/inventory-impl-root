@@ -77,7 +77,8 @@ public class PgInventorySystem implements InventorySystem {
       UPDATE items SET name=$2, display_name=$3, type=$4, description=$5, container_id=$6,
         data_kind=$7, data_mutable=$8, data_archive=$9, quantity=$10, weight_grams=$11,
         length_cm=$12, width_cm=$13, height_cm=$14, ts=$15, min_on_hand=$16, max_on_hand=$17,
-        latitude=$18, longitude=$19, heavy=$20, expires_at=$21, expiration_absolute=$22 WHERE id=$1""";
+        latitude=$18, longitude=$19, heavy=$20, expires_at=$21, expiration_absolute=$22,
+        data_locator=$23 WHERE id=$1""";
 
   private final static String INSERT_AUDIT = """
       INSERT INTO audit_events (id, ts, principal, action, target_id, details)
@@ -176,13 +177,27 @@ public class PgInventorySystem implements InventorySystem {
 
   @Override
   public CompletionStage<Boolean> deleteItem(String id) {
-    AuditEvent deleted = event("item.delete", id, null);
+    // RETURNING, not a preceding SELECT: the audit row records WHAT was
+    // deleted (the memory twin always did, and the parity kit demands it),
+    // and a deleted item is unrecoverable from anywhere else.
     // children are orphaned, not cascaded (fk_items_container is ON DELETE SET
     // NULL): removing a shelf must not delete what was on it
-    return this.events.announce(this.pool
-        .withTransaction(conn -> conn.preparedQuery("DELETE FROM items WHERE id=$1").execute(Tuple.of(id))
-            .flatMap(rs -> rs.rowCount() == 0 ? Uni.createFrom().item(false) : audit(conn, deleted).map(v -> true)))
-        .subscribeAsCompletionStage(), deleted);
+    java.util.concurrent.atomic.AtomicReference<AuditEvent> recorded = new java.util.concurrent.atomic.AtomicReference<>();
+    return this.pool.withTransaction(
+        conn -> conn.preparedQuery("DELETE FROM items WHERE id=$1 RETURNING *").execute(Tuple.of(id)).flatMap(rs -> {
+          if (rs.rowCount() == 0)
+            return Uni.createFrom().item(false);
+          AuditEvent deleted = event("item.delete", id,
+              ItemFactory.serialize(fromRow(rs.iterator().next(), java.util.Set.of())));
+          recorded.set(deleted);
+          return audit(conn, deleted).map(v -> true);
+        })).subscribeAsCompletionStage()
+        // announced by hand rather than through announce(): the fact only
+        // exists once the row is read, which is inside the transaction
+        .whenComplete((removed, failure) -> {
+          if (failure == null && Boolean.TRUE.equals(removed) && recorded.get() != null)
+            this.events.publish(recorded.get());
+        });
   }
 
   @Override
@@ -415,7 +430,7 @@ public class PgInventorySystem implements InventorySystem {
     String kind = r.getString("data_kind");
     if (kind != null)
       b.dataInfo(new DataInfo(MediaKind.valueOf(kind), Boolean.TRUE.equals(r.getBoolean("data_mutable")),
-          Boolean.TRUE.equals(r.getBoolean("data_archive"))));
+          Boolean.TRUE.equals(r.getBoolean("data_archive")), r.getString("data_locator")));
     Long quantity = r.getLong("quantity");
     if (quantity != null)
       b.quantity(quantity);
@@ -448,7 +463,7 @@ public class PgInventorySystem implements InventorySystem {
         i.getParValues().map(ParValues::minOnHand).orElse(null),
         i.getParValues().map(ParValues::maxOnHand).orElse(null), coords == null ? null : coords.latitude(),
         coords == null ? null : coords.longitude(), i.isHeavy(), exp == null ? null : odt(exp.when()),
-        exp != null && exp.absolute()
+        exp != null && exp.absolute(), di == null ? null : di.locator()
     });
   }
 

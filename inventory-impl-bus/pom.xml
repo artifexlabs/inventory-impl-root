@@ -24,7 +24,7 @@
   <parent>
     <groupId>io.artifexlabs.inventory</groupId>
     <artifactId>inventory-impl-root</artifactId>
-    <version>0.1.1-SNAPSHOT</version>
+    <version>0.2.0-SNAPSHOT</version>
   </parent>
 
   <artifactId>inventory-impl-bus</artifactId>

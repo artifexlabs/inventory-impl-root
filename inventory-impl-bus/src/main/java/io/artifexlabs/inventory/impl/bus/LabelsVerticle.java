@@ -90,7 +90,7 @@ public class LabelsVerticle extends ServiceVerticle {
       String actor = env.userId();
       return item(env, id).thenCompose(item -> send(PrintPackets.PRINT,
           PrintPackets.attribute(PrintPackets.label(item, url, format, QrCodes.png(url, DEFAULT_QR_PIXELS)), actor,
-              null))
+              env.requestId()))
           .thenCompose(
               ack -> record(env, "label.print", id, new JsonObject().put("accepted", accepted(ack))).thenApply(v -> {
                 // acceptance, not completion: TCP 9100 never told us more,
@@ -129,7 +129,7 @@ public class LabelsVerticle extends ServiceVerticle {
         }));
       }
       return collected.thenCompose(labels -> send(PrintPackets.PRINT_BATCH,
-          PrintPackets.attribute(PrintPackets.batch(labels, halfCut), actor, null))
+          PrintPackets.attribute(PrintPackets.batch(labels, halfCut), actor, env.requestId()))
           .thenCompose(ack -> record(env, "label.print-batch", "printer",
               new JsonObject().put("accepted", accepted(ack)).put("count", labels.size()).put("halfCut", halfCut))
               .thenApply(v -> {
@@ -140,12 +140,13 @@ public class LabelsVerticle extends ServiceVerticle {
     });
     on(BusActions.LABELS_FEED, env -> {
       String principal = env.principal();
-      return send(PrintPackets.FEED, PrintPackets.attribute(new JsonObject(), env.userId(), null)).thenCompose(
-          ack -> record(env, "label.feed", "printer", new JsonObject().put("accepted", accepted(ack))).thenApply(v -> {
-            if (!accepted(ack))
-              throw BusServiceException.unavailable(reason(ack));
-            return (Object) new JsonObject().put("accepted", true);
-          }));
+      return send(PrintPackets.FEED, PrintPackets.attribute(new JsonObject(), env.userId(), env.requestId()))
+          .thenCompose(ack -> record(env, "label.feed", "printer", new JsonObject().put("accepted", accepted(ack)))
+              .thenApply(v -> {
+                if (!accepted(ack))
+                  throw BusServiceException.unavailable(reason(ack));
+                return (Object) new JsonObject().put("accepted", true);
+              }));
     });
   }
 

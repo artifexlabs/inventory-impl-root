@@ -18,6 +18,7 @@
 package io.artifexlabs.inventory.impl.bus;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -41,7 +42,7 @@ import io.vertx.core.json.JsonObject;
 public class DefaultBusEnvelopeTest {
 
   private static DefaultBusEnvelope envelope(JsonObject data) {
-    return new DefaultBusEnvelope(DefaultBusEnvelope.VERSION, "fabric", "user-1", "user@example.com",
+    return new DefaultBusEnvelope(DefaultBusEnvelope.VERSION, "fabric", "req-1", "user-1", "user@example.com",
         Set.of(Roles.READ, Roles.WRITE), BusActions.ITEMS_CREATE, Optional.of("target-1"), data);
   }
 
@@ -108,5 +109,35 @@ public class DefaultBusEnvelopeTest {
     assertEquals(sent, received);
     assertEquals("user-1", received.userId());
     assertEquals("user@example.com", received.principal());
+  }
+
+  @Test
+  public void requestIdSurvivesTheWire() {
+    // the thread that reconnects a late outcome to the request that caused it
+    DefaultBusEnvelope sent = envelope(new JsonObject());
+    assertEquals("req-1", sent.toJson().getString("requestId"));
+    assertEquals("req-1", DefaultBusEnvelope.fromJson(sent.toJson()).requestId());
+  }
+
+  @Test
+  public void anEnvelopeWithoutARequestIdIsRefused() {
+    // admission turns this into a 400; minting one here would fabricate a link
+    // to a cause we never saw
+    JsonObject wire = envelope(new JsonObject()).toJson();
+    wire.remove("requestId");
+    assertThrows(IllegalArgumentException.class, () -> DefaultBusEnvelope.fromJson(wire));
+    JsonObject blank = envelope(new JsonObject()).toJson().put("requestId", "  ");
+    assertThrows(IllegalArgumentException.class, () -> DefaultBusEnvelope.fromJson(blank));
+  }
+
+  @Test
+  public void originatingMintsAFreshIdPerEnvelope() {
+    // a service starting its own work is a NEW unit of work, not a missing id
+    DefaultBusEnvelope first = DefaultBusEnvelope.originating("fabric", "user-1", "user@example.com",
+        Set.of(Roles.READ), BusActions.ITEMS_CREATE, Optional.empty(), new JsonObject());
+    DefaultBusEnvelope second = DefaultBusEnvelope.originating("fabric", "user-1", "user@example.com",
+        Set.of(Roles.READ), BusActions.ITEMS_CREATE, Optional.empty(), new JsonObject());
+    assertEquals(io.artifexlabs.inventory.api.Ulid.LENGTH, first.requestId().length());
+    assertNotEquals(first.requestId(), second.requestId());
   }
 }

@@ -112,12 +112,15 @@ public abstract class ServiceVerticle extends AbstractVerticle {
     return storage(envelope.toJson());
   }
 
-  /** Ask storage for a DIFFERENT operation on behalf of the same caller. */
+  /**
+   * Ask storage for a DIFFERENT operation on behalf of the same caller. The originating request id rides along: a
+   * derived operation is still part of the request that asked for it.
+   */
   protected final CompletionStage<Object> storage(BusEnvelope envelope, String action, String targetId,
       JsonObject data) {
-    return storage(new DefaultBusEnvelope(envelope.version(), envelope.token(), envelope.userId(), envelope.principal(),
-        envelope.roles(), action, java.util.Optional.ofNullable(targetId), data == null ? new JsonObject() : data)
-        .toJson());
+    return storage(new DefaultBusEnvelope(envelope.version(), envelope.token(), envelope.requestId(), envelope.userId(),
+        envelope.principal(), envelope.roles(), action, java.util.Optional.ofNullable(targetId),
+        data == null ? new JsonObject() : data).toJson());
   }
 
   private CompletionStage<Object> storage(JsonObject envelope) {

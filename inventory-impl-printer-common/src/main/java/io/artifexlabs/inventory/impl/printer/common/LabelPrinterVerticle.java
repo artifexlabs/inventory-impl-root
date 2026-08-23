@@ -135,10 +135,11 @@ public class LabelPrinterVerticle extends AbstractVerticle {
     message.reply(PrintPackets.accepted(0));
     JsonObject packet = message.body();
     String actor = packet == null ? null : PrintPackets.actorOf(packet).orElse(null);
+    String correlation = packet == null ? null : PrintPackets.correlationOf(packet).orElse(null);
     this.printer.feed().whenComplete((fed, thrown) -> {
       if (thrown == null && Boolean.TRUE.equals(fed))
-        this.status
-            .publish(StatusEvent.info("printer.fed", "The tape was fed and cut.").source("printer").actor(actor));
+        this.status.publish(StatusEvent.info("printer.fed", "The tape was fed and cut.").source("printer").actor(actor)
+            .correlationId(correlation));
       // failures already publish their own event from the driver
     });
   }

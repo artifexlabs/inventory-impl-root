@@ -77,10 +77,10 @@ public final class BusGuard {
     }
     Optional<String> required = BusActions.requiredRole(envelope.action());
     if (required.isPresent() && !envelope.roles().contains(required.get())) {
-      this.status.publish(
-          StatusEvent.warning("bus.forbidden", "You do not have permission to perform that action.").source(SOURCE)
-              .subject("action", envelope.action()).subject("requiredRole", required.get()).actor(envelope.userId())
-              .detail("Action " + envelope.action() + " requires the role " + required.get() + "."));
+      this.status.publish(StatusEvent.warning("bus.forbidden", "You do not have permission to perform that action.")
+          .source(SOURCE).subject("action", envelope.action()).subject("requiredRole", required.get())
+          .actor(envelope.userId()).correlationId(envelope.requestId())
+          .detail("Action " + envelope.action() + " requires the role " + required.get() + "."));
       throw BusServiceException.forbidden("action " + envelope.action() + " requires role " + required.get());
     }
     return envelope;

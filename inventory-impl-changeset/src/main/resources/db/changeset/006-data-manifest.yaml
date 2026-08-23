@@ -1,0 +1,182 @@
+databaseChangeLog:
+  - changeSet:
+      id: 006-data-manifest-dictionaries
+      author: do23-item6
+      comment: >
+        The two dictionaries a manifest's rows point at instead of repeating
+        text. A manifest has one row per FILE — a backup disk is easily
+        hundreds of thousands — so mime types and path components are stored
+        ONCE and referenced by a small integer.
+
+        path_elements is APPEND-ONLY by contract: a rename looks up or
+        creates the components of the new name and rewrites the referring
+        row's id sequence. Existing components are never overwritten or
+        reused, because other rows still point at them; overwriting would
+        silently repath files nobody touched.
+      changes:
+        - createTable:
+            tableName: mime_types
+            columns:
+              - column:
+                  name: id
+                  type: int
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_mime_types
+              - column:
+                  name: name
+                  type: text
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_mime_types_name
+        - createTable:
+            tableName: path_elements
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: pk_path_elements
+              - column:
+                  name: name
+                  type: text
+                  constraints:
+                    nullable: false
+                    unique: true
+                    uniqueConstraintName: uq_path_elements_name
+      rollback:
+        - dropTable:
+            tableName: path_elements
+        - dropTable:
+            tableName: mime_types
+
+  - changeSet:
+      id: 006-data-entries
+      author: do23-item6
+      comment: >
+        One row per file on a data medium (ongoing item 6). The medium is an
+        ordinary item; its files are NOT items, because files have no par
+        values, labels, or containment of their own. Archives are the one
+        exception and are materialized as contained items by the write path,
+        each carrying its own manifest.
+
+        Two hashes per row, both stored as bytes:
+          - hash: the CONTENT digest, answering "which disc has this file?"
+          - path_hash: a digest of the scope-relative path, so "same file at
+            the same place" (the mirror question) is one indexed byte
+            compare instead of a path-sequence match.
+        path_ids keeps the human-readable path recoverable by joining
+        path_elements, and is what a rename rewrites.
+      changes:
+        - createTable:
+            tableName: data_entries
+            columns:
+              - column:
+                  name: item_id
+                  type: varchar(26)
+                  constraints:
+                    nullable: false
+                    references: items(id)
+                    foreignKeyName: fk_data_entries_item
+                    deleteCascade: true
+              - column:
+                  name: path_ids
+                  type: bigint[]
+                  constraints:
+                    nullable: false
+              - column:
+                  name: path_hash
+                  type: bytea
+                  constraints:
+                    nullable: false
+              - column:
+                  name: path_text
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: size_bytes
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: hash_alg
+                  type: smallint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: hash
+                  type: bytea
+                  constraints:
+                    nullable: false
+              - column:
+                  name: mime_id
+                  type: int
+                  constraints:
+                    references: mime_types(id)
+                    foreignKeyName: fk_data_entries_mime
+              - column:
+                  name: modified_at
+                  type: timestamptz
+              - column:
+                  name: is_archive
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+        # one row per path per medium; re-describing a medium replaces them
+        - addPrimaryKey:
+            tableName: data_entries
+            columnNames: item_id, path_hash
+            constraintName: pk_data_entries
+        # "which disc has this file?" — the payoff query
+        - createIndex:
+            tableName: data_entries
+            indexName: idx_data_entries_hash
+            columns:
+              - column:
+                  name: hash_alg
+              - column:
+                  name: hash
+        # the mirror question: same content AND same place
+        - createIndex:
+            tableName: data_entries
+            indexName: idx_data_entries_path_hash
+            columns:
+              - column:
+                  name: path_hash
+        # substring search over a medium's listing, and rename-by-prefix
+        - createIndex:
+            tableName: data_entries
+            indexName: idx_data_entries_item_path
+            columns:
+              - column:
+                  name: item_id
+              - column:
+                  name: path_text
+      rollback:
+        - dropTable:
+            tableName: data_entries
+
+  - changeSet:
+      id: 006-data-locator
+      author: do23-item6
+      comment: >
+        Where a medium is reached when it is not simply in your hands: a
+        mount point, share URI, volume label, or bucket. Free text on
+        purpose — it names things this system does not manage.
+      changes:
+        - addColumn:
+            tableName: items
+            columns:
+              - column:
+                  name: data_locator
+                  type: text
+      rollback:
+        - dropColumn:
+            tableName: items
+            columnName: data_locator

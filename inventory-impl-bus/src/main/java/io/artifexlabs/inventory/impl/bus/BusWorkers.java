@@ -44,7 +44,7 @@ public final class BusWorkers {
   /** Everything the workers act through, bundled for deployment. */
   public record BackendServices(InventorySystem inventory, AssetStore assets, RegionSystem regions,
       AuditReader auditReader, AuditSink auditSink, LabelPrinter printer, UserStore users, TokenService tokens,
-      io.artifexlabs.inventory.api.UpcCatalog catalog) {
+      io.artifexlabs.inventory.api.UpcCatalog catalog, io.artifexlabs.inventory.api.DataSystem data) {
   }
 
   private BusWorkers() {
@@ -70,7 +70,8 @@ public final class BusWorkers {
         // the ONE door to storage; every public verticle forwards here
         vertx.deployVerticle(new StorageVerticle(s, provision)), vertx.deployVerticle(new ItemsVerticle(guard)),
         vertx.deployVerticle(new AssetsVerticle(guard)), vertx.deployVerticle(new RegionsVerticle(guard)),
-        vertx.deployVerticle(new AuditVerticle(guard)), vertx.deployVerticle(new LabelsVerticle(guard), workerThread),
+        vertx.deployVerticle(new AuditVerticle(guard)), vertx.deployVerticle(new DataVerticle(guard)),
+        vertx.deployVerticle(new LabelsVerticle(guard), workerThread),
         // the printer is reached over the bus now (PLAN.md Phase 21): it composes
         // and rasterizes, which is CPU work that must stay off the event loop
         vertx.deployVerticle(new io.artifexlabs.inventory.impl.printer.common.LabelPrinterVerticle(s.printer(), status,

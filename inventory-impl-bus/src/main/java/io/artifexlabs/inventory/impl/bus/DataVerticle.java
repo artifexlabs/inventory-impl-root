@@ -15,18 +15,19 @@
  * limitations under the License.
  * @formatter:on
  */
-package io.artifexlabs.inventory.impl;
+package io.artifexlabs.inventory.impl.bus;
 
-import io.artifexlabs.inventory.impl.tck.InventorySystemTck;
+import io.artifexlabs.inventory.api.bus.BusActions;
 
 /**
- * The in-memory backend against the parity kit. A fresh store per test comes free: new objects.
+ * The public data-manifest service: admission control and routing only. Every operation is performed by the storage
+ * layer behind {@code storage} — this verticle holds no backend reference at all (PLAN.md Phase 21, ask 2).
  */
-public class InMemoryInventorySystemTest extends InventorySystemTck {
+public class DataVerticle extends ServiceVerticle {
 
-  @Override
-  protected Backend backend() {
-    InMemoryAuditSink audit = new InMemoryAuditSink();
-    return new Backend(new InMemoryInventorySystem(audit, PRINCIPAL), audit::getEvents);
+  public DataVerticle(BusGuard guard) {
+    super(BusActions.addressOf(BusActions.DATA_ENTRIES), guard);
+    forward(BusActions.DATA_REPLACE_MANIFEST, BusActions.DATA_RENAME_PATH, BusActions.DATA_ENTRIES,
+        BusActions.DATA_SUMMARY, BusActions.DATA_BY_HASH, BusActions.DATA_MIRRORS);
   }
 }
