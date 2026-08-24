@@ -3,9 +3,14 @@ databaseChangeLog:
       id: 001-core
       author: phase-15
       comment: >
-        Items and their tags. Phase 15 collapsed the accreted 001-013 changesets
-        into four that express the END state — no data was ever deployed, so
-        there was nothing to migrate and no reason to keep the archaeology.
+        Items, their tags, and the physical markers that resolve to them.
+
+        Collapsed twice, both times because nothing had ever been deployed:
+        Phase 15 (2026-08-15) folded the accreted 001-013 changesets into
+        four, and 2026-08-23 folded the later additions in here too. What is
+        left expresses the schema as it should have been, with no ALTER
+        replaying a decision that could simply have been made correctly the
+        first time.
 
         Containment is a TREE, not a graph: container_id is a single optional
         self-reference, because a physical thing is in exactly one place. The
@@ -77,6 +82,12 @@ databaseChangeLog:
               - column:
                   name: data_archive
                   type: boolean
+              # where a medium is reached when it is not simply in your hands:
+              # a mount point, share URI, volume label, or bucket. Free text on
+              # purpose — it names things this system does not manage.
+              - column:
+                  name: data_locator
+                  type: text
               - column:
                   name: quantity
                   type: bigint
@@ -153,3 +164,39 @@ databaseChangeLog:
             columns:
               - column:
                   name: tag_key
+        # Physical markers resolving to items: one (kind, value) -> item_id
+        # mapping for every marker type (nfc-uid, upc, foreign qr, ...), the
+        # same shape as user_identities(provider, subject) rather than a
+        # bespoke column per marker. A marker claims at most one item.
+        - createTable:
+            tableName: item_identities
+            columns:
+              - column:
+                  name: kind
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: value
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: item_id
+                  type: varchar(26)
+                  constraints:
+                    nullable: false
+                    references: items(id)
+                    foreignKeyName: fk_item_identities_item
+                    deleteCascade: true
+        - addPrimaryKey:
+            tableName: item_identities
+            columnNames: kind, value
+            constraintName: pk_item_identities
+        # list an item's markers without a full scan
+        - createIndex:
+            tableName: item_identities
+            indexName: idx_item_identities_item
+            columns:
+              - column:
+                  name: item_id

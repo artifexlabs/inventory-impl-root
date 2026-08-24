@@ -1,9 +1,17 @@
 databaseChangeLog:
-  # Phase 15 (2026-08-15) collapsed the accreted 001-locations … 013-audit-seq
-  # changesets into these four. No data had ever been deployed, so the history
-  # was pure archaeology: these express the schema as it should have been, with
-  # unified containment (items form a tree; a location is a container carrying
-  # coordinates) rather than a separate locations table and a join table.
+  # The whole schema, in five changesets — one per domain, each a single
+  # changeSet that creates its tables outright.
+  #
+  # Collapsed twice, both times because no data had ever been deployed and the
+  # history was therefore pure archaeology: Phase 15 (2026-08-15) folded the
+  # accreted 001-locations … 013-audit-seq into four, and 2026-08-23 folded the
+  # later additions (item identities, data manifests, the data locator) into
+  # the domains they belong to. No changeset ALTERs a table another changeset
+  # created — every column is declared where it lives.
+  #
+  # This is a fresh-install schema. Collapsing again is only ever safe while
+  # nothing you care about has run it: once applied, Liquibase pins each
+  # changeSet by checksum and editing one in place breaks that database.
   - include:
       file: db/changeset/001-core.yaml
   - include:
@@ -12,10 +20,5 @@ databaseChangeLog:
       file: db/changeset/003-identity.yaml
   - include:
       file: db/changeset/004-audit.yaml
-  # Ongoing item 7 (2026-08-15): physical markers (NFC/UPC/QR) -> item
   - include:
-      file: db/changeset/005-item-identities.yaml
-  # Ongoing item 6 (2026-08-22): what files are on a data medium — manifests
-  # with dictionary-encoded paths/mime types, content and path hashes
-  - include:
-      file: db/changeset/006-data-manifest.yaml
+      file: db/changeset/005-data.yaml
