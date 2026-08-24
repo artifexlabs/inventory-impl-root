@@ -36,6 +36,14 @@ public class LabelComposer {
 
   private final static int GAP = 8;
   private final static int MARGIN = 4;
+  /**
+   * Horizontal text inset for the 4-in-wide die-cut formats. MARGIN's 4 dots (0.02 in) is right for a 12 mm
+   * tape, where 11 more dots would eat 9% of the label, but on 4-in stock it reads as text touching the edge —
+   * observed on the first 4x6.5 hardware print and confirmed on already-printed 4x4 stock, 2026-08-24. 15 dots =
+   * MARGIN + 4 typographic points at 203 dpi (4 * 203/72 = 11.3). Applies to BOTH 812-dot-wide die-cut layouts,
+   * x-large and 2x-large; vertical insets keep MARGIN, since only the left/right edges were ever tight.
+   */
+  private final static int WIDE_MARGIN = 15;
 
   /**
    * Compose a continuous-tape label. {@code qr} must arrive module-exact (integer dots per module, no embedded margin —
@@ -272,34 +280,34 @@ public class LabelComposer {
 
       int y = MARGIN + qrSize + 56;
       g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 52));
-      g.drawString(fit(g, name, width - 2 * MARGIN), MARGIN, y);
+      g.drawString(fit(g, name, width - 2 * WIDE_MARGIN), WIDE_MARGIN, y);
       y += 40;
       g.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 30));
-      g.drawString(id, MARGIN, y);
+      g.drawString(id, WIDE_MARGIN, y);
       y += 40;
       Font fieldFont = new Font(Font.SANS_SERIF, Font.PLAIN, 32);
       g.setFont(fieldFont);
       // type and quantity share a line as fixed columns — each fits() only
       // within its own column, so neither can ever swallow the other
       int qtyX = 580;
-      g.drawString(fit(g, "Type: " + type, qtyX - MARGIN - GAP), MARGIN, y);
+      g.drawString(fit(g, "Type: " + type, qtyX - WIDE_MARGIN - GAP), WIDE_MARGIN, y);
       if (quantity != null)
-        g.drawString(fit(g, "Qty: " + quantity, width - qtyX - MARGIN), qtyX, y);
+        g.drawString(fit(g, "Qty: " + quantity, width - qtyX - WIDE_MARGIN), qtyX, y);
       y += 40;
       if (locationName != null && !locationName.isBlank()) {
-        g.drawString(fit(g, "Location: " + locationName, width - 2 * MARGIN), MARGIN, y);
+        g.drawString(fit(g, "Location: " + locationName, width - 2 * WIDE_MARGIN), WIDE_MARGIN, y);
         y += 40;
       }
       if (expiresOn != null) {
-        g.drawString(fit(g, expiryLine(expiresOn, expirationAbsolute), width - 2 * MARGIN), MARGIN, y);
+        g.drawString(fit(g, expiryLine(expiresOn, expirationAbsolute), width - 2 * WIDE_MARGIN), WIDE_MARGIN, y);
         y += 40;
       }
       if (heavy) {
         g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 44));
-        g.drawString(HEAVY_MARK, MARGIN, y + 8);
+        g.drawString(HEAVY_MARK, WIDE_MARGIN, y + 8);
       }
       g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 22));
-      g.drawString("Printed " + printedOn, MARGIN, height - 10);
+      g.drawString("Printed " + printedOn, WIDE_MARGIN, height - 10);
     } finally {
       g.dispose();
     }
@@ -322,50 +330,50 @@ public class LabelComposer {
 
       int y = MARGIN + qrSize + 60;
       g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 56));
-      g.drawString(fit(g, name, width - 2 * MARGIN), MARGIN, y);
+      g.drawString(fit(g, name, width - 2 * WIDE_MARGIN), WIDE_MARGIN, y);
       y += 44;
       g.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 32));
-      g.drawString(id, MARGIN, y);
+      g.drawString(id, WIDE_MARGIN, y);
       y += 42;
       Font fieldFont = new Font(Font.SANS_SERIF, Font.PLAIN, 32);
       g.setFont(fieldFont);
       if (coordinates != null && !coordinates.isBlank()) {
-        g.drawString(fit(g, coordinates, width - 2 * MARGIN), MARGIN, y);
+        g.drawString(fit(g, coordinates, width - 2 * WIDE_MARGIN), WIDE_MARGIN, y);
         y += 42;
       }
       int qtyX = 580;
-      g.drawString(fit(g, "Type: " + type, qtyX - MARGIN - GAP), MARGIN, y);
+      g.drawString(fit(g, "Type: " + type, qtyX - WIDE_MARGIN - GAP), WIDE_MARGIN, y);
       if (quantity != null)
-        g.drawString(fit(g, "Qty: " + quantity, width - qtyX - MARGIN), qtyX, y);
+        g.drawString(fit(g, "Qty: " + quantity, width - qtyX - WIDE_MARGIN), qtyX, y);
       y += 42;
       if (locationName != null && !locationName.isBlank()) {
-        g.drawString(fit(g, "Location: " + locationName, width - 2 * MARGIN), MARGIN, y);
+        g.drawString(fit(g, "Location: " + locationName, width - 2 * WIDE_MARGIN), WIDE_MARGIN, y);
         y += 42;
       }
       if (expiresOn != null) {
-        g.drawString(fit(g, expiryLine(expiresOn, expirationAbsolute), width - 2 * MARGIN), MARGIN, y);
+        g.drawString(fit(g, expiryLine(expiresOn, expirationAbsolute), width - 2 * WIDE_MARGIN), WIDE_MARGIN, y);
         y += 42;
       }
       if (heavy) {
         g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 48));
-        g.drawString(HEAVY_MARK, MARGIN, y + 8);
+        g.drawString(HEAVY_MARK, WIDE_MARGIN, y + 8);
         y += 52;
         g.setFont(fieldFont);
       }
       Font smallFont = new Font(Font.SANS_SERIF, Font.PLAIN, 30);
       g.setFont(smallFont);
       if (tags != null && !tags.isBlank())
-        for (String line : wrap(g.getFontMetrics(smallFont), "Tags: " + tags, width - 2 * MARGIN, 3)) {
-          g.drawString(line, MARGIN, y);
+        for (String line : wrap(g.getFontMetrics(smallFont), "Tags: " + tags, width - 2 * WIDE_MARGIN, 3)) {
+          g.drawString(line, WIDE_MARGIN, y);
           y += 38;
         }
       if (description != null && !description.isBlank())
-        for (String line : wrap(g.getFontMetrics(smallFont), description, width - 2 * MARGIN, 6)) {
-          g.drawString(line, MARGIN, y);
+        for (String line : wrap(g.getFontMetrics(smallFont), description, width - 2 * WIDE_MARGIN, 6)) {
+          g.drawString(line, WIDE_MARGIN, y);
           y += 36;
         }
       g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 22));
-      g.drawString("Printed " + printedOn, MARGIN, height - 12);
+      g.drawString("Printed " + printedOn, WIDE_MARGIN, height - 12);
     } finally {
       g.dispose();
     }
