@@ -6,3 +6,6 @@ release.properties
 *.log
 *.iml
 .flattened-pom.xml
+
+# find output fed to path-layout-measure.py — gigabytes, regenerable, never committed
+inventory-impl-pg/src/test/resources/measurements/paths-*.txt
