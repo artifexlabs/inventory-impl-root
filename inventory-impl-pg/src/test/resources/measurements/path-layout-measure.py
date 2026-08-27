@@ -51,6 +51,14 @@ USAGE
     uv handles the dependency; no venv, no pip. Falls back to plain python3 if
     psycopg is already importable.
 
+SCALE NOTES (added for a 120 TB run)
+    Paths are RESERVOIR-SAMPLED from the stream, so `find` output of any size costs
+    O(--scales max) memory, not O(file). Sampling is uniform over the whole tree,
+    which also matters for correctness: the first N lines of `find` are one subtree
+    whose vocabulary is unrepresentatively small.
+    Budget roughly 1 GB of RAM and ~90s of load per 1M sampled rows, plus the trgm
+    index build. `find` itself needs no hashing, so it is I/O-cheap.
+
 SAFETY
     Creates and DROPS a schema named `pathmeasure` in the target database. It never
     touches the public schema, so pointing it at a real inventory database is
@@ -158,6 +166,7 @@ class Harvest:
     paths: list[str]
     walked_from: str
     depth_hist: dict[int, int] = field(default_factory=dict)
+    population: int = 0
 
     def report(self) -> str:
         if not self.paths:
@@ -165,46 +174,68 @@ class Harvest:
         depths = sorted(self.depth_hist.items())
         avg = sum(d * n for d, n in depths) / len(self.paths)
         comps = sum(d for d, n in depths for _ in range(n))
+        frac = (len(self.paths) / self.population * 100) if self.population else 100.0
         return (f"  source          {self.walked_from}\n"
-                f"  paths           {len(self.paths):,}\n"
+                f"  population      {self.population:,} paths seen\n"
+                f"  sampled         {len(self.paths):,} ({frac:.1f}%, uniform reservoir)\n"
                 f"  avg depth       {avg:.2f} components\n"
                 f"  total comps     {comps:,}\n"
                 f"  depth spread    " + ", ".join(f"{d}:{n:,}" for d, n in depths[:12]))
 
 
-def harvest(walk: str | None, paths_file: str | None, limit: int) -> Harvest:
-    out: list[str] = []
-    hist: dict[int, int] = {}
+def harvest(walk: str | None, paths_file: str | None, want: int, rng: random.Random) -> Harvest:
+    """Reservoir-sample `want` paths from a stream of unbounded size.
+
+    Two reasons this is a reservoir and not `head -n`:
+      MEMORY  a 120 TB filesystem yields tens of millions of lines; holding them
+              all costs gigabytes. A reservoir is O(want).
+      CORRECTNESS  the first N lines of `find` output are ONE SUBTREE, whose
+              component vocabulary is artificially small and whose reuse ratio is
+              therefore artificially high. Vocabulary saturation is the thing being
+              measured, so the sample must be drawn from the whole population.
+              Increasing sample sizes from the same tree give vocab(N) honestly.
+    """
+    res: list[str] = []
+    seen = 0
     src = walk or paths_file or "?"
 
-    def note(rel: str) -> bool:
+    def offer(rel: str) -> None:
+        nonlocal seen
         rel = rel.lstrip("/")
         if not rel:
-            return True
-        out.append(rel)
-        d = rel.count("/") + 1
-        hist[d] = hist.get(d, 0) + 1
-        return len(out) < limit
+            return
+        seen += 1
+        if len(res) < want:
+            res.append(rel)
+        else:  # classic Algorithm R
+            j = rng.randrange(seen)
+            if j < want:
+                res[j] = rel
 
     if paths_file:
         with open(paths_file, "r", errors="replace") as fh:
-            for line in fh:
+            for n, line in enumerate(fh, 1):
                 line = line.strip()
-                if line and not note(line):
-                    break
+                if line:
+                    offer(line)
+                if n % 2_000_000 == 0:
+                    print(f"    ...read {n:,} lines", flush=True)
     else:
         root = os.path.abspath(walk or ".")
-        stop = False
         for dirpath, dirnames, filenames in os.walk(root, onerror=lambda e: None):
             dirnames[:] = [d for d in dirnames if not os.path.islink(os.path.join(dirpath, d))]
             for fn in filenames:
-                rel = os.path.relpath(os.path.join(dirpath, fn), root)
-                if not note(rel):
-                    stop = True
-                    break
-            if stop:
-                break
-    return Harvest(out, src, hist)
+                offer(os.path.relpath(os.path.join(dirpath, fn), root))
+            if seen % 2_000_000 == 0 and seen:
+                print(f"    ...walked {seen:,} files", flush=True)
+
+    hist: dict[int, int] = {}
+    for rel in res:
+        d = rel.count("/") + 1
+        hist[d] = hist.get(d, 0) + 1
+    h = Harvest(res, src, hist)
+    h.population = seen
+    return h
 
 
 MIMES = ["application/octet-stream", "text/plain", "image/jpeg", "video/mp4", "application/pdf",
@@ -264,9 +295,11 @@ def load(conn, item_ids, rows, rng: random.Random) -> dict:
     t0 = time.perf_counter()
     with cur.copy("COPY data_entries (item_id, path_ids, path_hash, path_text, size_bytes,"
                   " hash_alg, hash, mime_id, is_archive) FROM STDIN") as cp:
-        for item, path, content in rows:
+        for n, (item, path, content) in enumerate(rows, 1):
+            if n % 500_000 == 0:
+                print(f"    ...copied {n:,}/{len(rows):,} rows", flush=True)
             parts = path.split("/")
-            cp.write_row((item, [comp_id[p] for p in parts],
+            cp.write_row((item, [comp_id[q] for q in parts],
                           hashlib.sha256(path.encode("utf-8", "replace")).digest(),
                           path, rng.randrange(1, 1 << 32), 1, content,
                           mime_ids[rng.randrange(len(mime_ids))], False))
@@ -330,6 +363,28 @@ def measure(conn, item_ids, rows, args) -> None:
     cur.execute("ANALYZE data_entries")
     conn.commit()
     after = row("entriesOf SUBSTRING  [with trgm]", Q_SCOPE_SUBSTRING, (probe_item, needle, needle))
+
+    # One needle length is not a measurement. Written expecting short needles to be
+    # the worst case (more trigrams matched); the first run showed the opposite,
+    # because ORDER BY path_text + LIMIT 100 lets a COMMON needle terminate early on
+    # the btree while a RARE one must scan deep. Kept as a sweep precisely because
+    # the intuition was wrong.
+    print("\n  needle-length sweep (trigram selectivity is the real cost driver):")
+    print(f"    {'needle':<16} {'len':>4} {'ms':>9}   plan")
+    for nlen in (3, 4, 5, 8, 12):
+        probe = sample.replace("/", "")[:nlen].lower()
+        if len(probe) < nlen:
+            continue
+        ms, scan = explain(cur, Q_SCOPE_SUBSTRING, (probe_item, probe, probe))
+        print(f"    {probe!r:<16} {nlen:>4} {ms:>9.2f}   {scan[:44]}")
+    print("    NOTE the first run of this sweep refuted the assumption behind it. Short,")
+    print("    COMMON needles came back FASTEST (0.33ms for 'lib') by walking the")
+    print("    (item_id, path_text) btree in ORDER BY order and stopping at LIMIT 100;")
+    print("    long, RARE needles were slowest (7.66ms) because the planner must look")
+    print("    far down that order to fill 100 rows, so it falls back to the trigram")
+    print("    bitmap. Selectivity drives cost, but ORDER BY + LIMIT inverts which end")
+    print("    hurts: the worst case is a needle that matches almost nothing, not one")
+    print("    that matches everything.")
     cur.execute(f"SELECT pg_size_pretty(pg_relation_size('{SCHEMA}.idx_trgm'))")
     size = cur.fetchone()[0]
     print(f"\n  trgm index: built in {build:.1f}s, {size} on disk")
@@ -372,11 +427,35 @@ def storage(conn) -> None:
     print(f"    {'table':<18} {'total':>10} {'heap':>10} {'indexes':>10}")
     for name, tot, heap, idx in cur.fetchall():
         print(f"    {name:<18} {tot:>10} {heap:>10} {idx:>10}")
-    cur.execute("SELECT pg_size_pretty(sum(octet_length(path_text))::bigint),"
-                " pg_size_pretty(sum(octet_length(path_ids::text))::bigint) FROM data_entries")
-    text_b, ids_b = cur.fetchone()
-    print(f"\n    path_text total  {text_b}")
-    print(f"    path_ids  total  {ids_b}   <- written, currently read by nothing (see header)")
+    # sampled, not a full scan: at tens of millions of rows the full sum is its own
+    # measurement problem. 200k rows is plenty for a mean column width.
+    cur.execute("""
+        SELECT avg(octet_length(path_text)), avg(8 * coalesce(array_length(path_ids,1),0)), count(*)
+          FROM (SELECT path_text, path_ids FROM data_entries LIMIT 200000) q
+    """)
+    avg_text, avg_ids, sampled = cur.fetchone()
+    cur.execute("SELECT count(*) FROM data_entries")
+    rows = cur.fetchone()[0]
+    cur.execute("SELECT pg_total_relation_size(%s)", (f"{SCHEMA}.path_elements",))
+    dict_bytes = cur.fetchone()[0]
+    text_total = float(avg_text) * rows
+    ids_total = float(avg_ids) * rows
+
+    def mb(b): return f"{b/1048576:.1f} MB"
+
+    print(f"\n  Q2 VERDICT — is the dictionary worth it?   (means over {sampled:,} sampled rows)")
+    print(f"    KEEP path_text (today: both stored)   {mb(text_total + ids_total + dict_bytes)}")
+    print(f"      path_text                           {mb(text_total)}")
+    print(f"      path_ids                            {mb(ids_total)}   <- read by NOTHING today")
+    print(f"      path_elements (+idx)                {mb(dict_bytes)}")
+    print(f"    DROP path_text, rebuild from ids      {mb(ids_total + dict_bytes)}")
+    print(f"    KEEP ids only if text is dropped      {mb(text_total)} -> {mb(ids_total + dict_bytes)}", end="")
+    delta = text_total - (ids_total + dict_bytes)
+    pct = delta / text_total * 100 if text_total else 0
+    print(f"   ({'saves' if delta > 0 else 'COSTS'} {mb(abs(delta))}, {pct:+.0f}%)")
+    print(f"    NOTE dropping path_text also costs the (item_id, path_text) index and the")
+    print(f"         ORDER BY path_text that entriesOf depends on — this is a storage")
+    print(f"         number, not a free win. Weigh it against the query section below.")
 
 
 def start_docker() -> tuple[str, str | None]:
@@ -423,7 +502,8 @@ def main() -> None:
     print("  PATH-LAYOUT MEASUREMENT — deciding 005-data.yaml's final index shape")
     print("=" * 96)
     print("\n  HARVEST")
-    h = harvest(args.walk, args.paths, biggest)
+    h = harvest(args.walk, args.paths, biggest, rng)
+    rng.shuffle(h.paths)  # so each --scales prefix is itself a uniform sample
     print(h.report())
     if len(h.paths) < min(scales):
         print(f"\n  !! only {len(h.paths):,} paths available; smallest requested scale is {min(scales):,}")
