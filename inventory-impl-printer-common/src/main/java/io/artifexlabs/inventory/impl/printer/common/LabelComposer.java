@@ -37,11 +37,11 @@ public class LabelComposer {
   private final static int GAP = 8;
   private final static int MARGIN = 4;
   /**
-   * Horizontal text inset for the 4-in-wide die-cut formats. MARGIN's 4 dots (0.02 in) is right for a 12 mm
-   * tape, where 11 more dots would eat 9% of the label, but on 4-in stock it reads as text touching the edge —
-   * observed on the first 4x6.5 hardware print and confirmed on already-printed 4x4 stock, 2026-08-24. 15 dots =
-   * MARGIN + 4 typographic points at 203 dpi (4 * 203/72 = 11.3). Applies to BOTH 812-dot-wide die-cut layouts,
-   * x-large and 2x-large; vertical insets keep MARGIN, since only the left/right edges were ever tight.
+   * Horizontal text inset for the 4-in-wide die-cut formats. MARGIN's 4 dots (0.02 in) is right for a 12 mm tape, where
+   * 11 more dots would eat 9% of the label, but on 4-in stock it reads as text touching the edge — observed on the
+   * first 4x6.5 hardware print and confirmed on already-printed 4x4 stock, 2026-08-24. 15 dots = MARGIN + 4 typographic
+   * points at 203 dpi (4 * 203/72 = 11.3). Applies to BOTH 812-dot-wide die-cut layouts, x-large and 2x-large; vertical
+   * insets keep MARGIN, since only the left/right edges were ever tight.
    */
   private final static int WIDE_MARGIN = 15;
 

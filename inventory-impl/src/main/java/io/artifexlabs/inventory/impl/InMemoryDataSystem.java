@@ -22,6 +22,8 @@ import static java.util.Objects.requireNonNull;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -33,6 +35,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import io.artifexlabs.inventory.api.DataEntry;
 import io.artifexlabs.inventory.api.DataInfo;
 import io.artifexlabs.inventory.api.DataSystem;
+import io.artifexlabs.inventory.api.DataTree;
+import io.artifexlabs.inventory.api.MerkleHash;
 import io.artifexlabs.inventory.api.DefaultAuditEvent;
 import io.artifexlabs.inventory.api.DefaultItem;
 import io.artifexlabs.inventory.api.HashAlgorithm;
@@ -98,9 +102,15 @@ public class InMemoryDataSystem implements DataSystem {
    * manifest AND becomes a contained item carrying its own.
    */
   private CompletionStage<Integer> store(String itemId, List<DataEntry> entries) {
+    // Carry completed hashes across a re-describe. Hashing a medium takes weeks;
+    // re-scanning it must not throw that away. "Same file" is (path, size,
+    // mtime) — a file whose size or timestamp moved is a different file that
+    // happens to share a name, and keeping its digest would be a lie nothing
+    // could later detect.
+    Map<String, DataEntry> previous = this.manifests.getOrDefault(itemId, Map.of());
     Map<String, DataEntry> scope = new java.util.LinkedHashMap<>();
     for (DataEntry e : entries)
-      scope.put(e.path(), e);
+      scope.put(e.path(), carryHash(previous.get(e.path()), e));
     this.manifests.put(itemId, scope);
 
     CompletionStage<Integer> counted = CompletableFuture.completedStage(entries.size());
@@ -111,6 +121,18 @@ public class InMemoryDataSystem implements DataSystem {
           .thenCompose(archiveId -> store(archiveId, entry.archiveContents()).thenApply(inner -> running + inner)));
     }
     return counted;
+  }
+
+  /** Give {@code fresh} the old digest when it truly describes the same file, otherwise leave it unhashed. */
+  private static DataEntry carryHash(DataEntry old, DataEntry fresh) {
+    if (old == null || old.hash() == null || fresh.hash() != null)
+      return fresh;
+    boolean sameFile = old.sizeBytes() == fresh.sizeBytes()
+        && java.util.Objects.equals(old.modified().orElse(null), fresh.modified().orElse(null));
+    return sameFile
+        ? new DataEntry(fresh.path(), fresh.sizeBytes(), old.hashAlgorithm(), old.hash(), fresh.mimeType(),
+            fresh.modifiedAt(), fresh.archiveContents())
+        : fresh;
   }
 
   /** An archive is a file AND a container: it earns an item of its own. */
@@ -218,9 +240,74 @@ public class InMemoryDataSystem implements DataSystem {
     List<Map.Entry<String, DataEntry>> hits = new ArrayList<>();
     for (Map.Entry<String, Map<String, DataEntry>> medium : this.manifests.entrySet())
       for (DataEntry entry : medium.getValue().values())
-        if (entry.hashAlgorithm() == algorithm && entry.hash().equals(wanted))
+        // an unhashed entry matches nothing: we do not know its content yet, and
+        // guessing would be worse than omitting it
+        if (entry.hash() != null && entry.hashAlgorithm() == algorithm && entry.hash().equals(wanted))
           hits.add(Map.entry(medium.getKey(), entry));
     return locate(hits);
+  }
+
+  @Override
+  public CompletionStage<List<SectionMatch>> findDuplicateSections(SectionQuery q) {
+    // Derives its tree through the SAME DataTree the Pg backend uses. This twin
+    // exists to prove that one; two hand-rolled tree walks would let the pair
+    // agree by luck and diverge the moment either was edited.
+    Map<String, List<SectionLocation>> places = new LinkedHashMap<>();
+    Map<String, long[]> sizes = new LinkedHashMap<>();
+    for (Map.Entry<String, Map<String, DataEntry>> medium : this.manifests.entrySet()) {
+      String itemId = medium.getKey();
+      List<DataEntry> entries = List.copyOf(medium.getValue().values());
+      for (DataTree.Node node : DataTree.build(HashAlgorithm.SHA256, entries)) {
+        if (node.subtreeFiles() < q.minFiles() || node.subtreeBytes() < q.minBytes() || node.depth() < q.minDepth())
+          continue;
+        byte[] ident = identityOf(q, node);
+        if (ident == null)
+          continue; // MERKLE and CONTENT do not exist until the files are hashed
+        String hex = HexFormat.of().formatHex(ident);
+        places.computeIfAbsent(hex, k -> new ArrayList<>())
+            .add(new SectionLocation(itemId, nameOf(itemId), node.path(), node.depth()));
+        sizes.computeIfAbsent(hex, k -> new long[] {
+            node.subtreeFiles(), node.subtreeBytes()
+        });
+      }
+    }
+    List<SectionMatch> out = new ArrayList<>();
+    for (Map.Entry<String, List<SectionLocation>> e : places.entrySet()) {
+      List<SectionLocation> at = e.getValue();
+      if (at.size() < 2)
+        continue;
+      long media = at.stream().map(SectionLocation::itemId).distinct().count();
+      boolean keep = switch (q.scope()) {
+      case ACROSS_MEDIA -> media > 1;
+      case WITHIN_MEDIUM -> at.size() > media; // the same subtree twice on ONE medium
+      case BOTH -> true;
+      };
+      if (!keep || (q.itemId() != null && at.stream().noneMatch(l -> l.itemId().equals(q.itemId()))))
+        continue;
+      long[] sz = sizes.get(e.getKey());
+      out.add(new SectionMatch(e.getKey(), sz[0], sz[1], List.copyOf(at)));
+    }
+    // biggest first, same order the Pg query produces
+    out.sort(Comparator.comparingLong(SectionMatch::subtreeBytes).reversed()
+        .thenComparing(Comparator.comparingLong(SectionMatch::subtreeFiles).reversed())
+        .thenComparing(SectionMatch::hash));
+    int from = Math.min(Math.max(q.page(), 0) * Math.max(q.size(), 1), out.size());
+    int to = Math.min(from + Math.max(q.size(), 1), out.size());
+    return CompletableFuture.completedStage(List.copyOf(out.subList(from, to)));
+  }
+
+  /** STRUCTURE is available at once; the other two stay null until the hasher has run. */
+  private static byte[] identityOf(SectionQuery q, DataTree.Node node) {
+    return q.match() == Match.STRUCTURE ? node.structureHash() : null;
+  }
+
+  private String nameOf(String itemId) {
+    try {
+      return this.items.getItem(itemId).toCompletableFuture().get().map(Item::getName).orElse(itemId);
+    } catch (Exception e) {
+      Thread.currentThread().interrupt();
+      return itemId;
+    }
   }
 
   @Override
@@ -234,8 +321,11 @@ public class InMemoryDataSystem implements DataSystem {
         continue;
       for (DataEntry entry : medium.getValue().values()) {
         DataEntry same = mine.get(entry.path());
-        // same place AND same content: the pair the Pg backend indexes
-        if (same != null && same.hashAlgorithm() == entry.hashAlgorithm() && same.hash().equals(entry.hash()))
+        // same place AND same content: the pair the Pg backend indexes. Two
+        // UNHASHED entries at the same path are not a mirror — same location is
+        // not evidence of same content, which is the whole point of the hash.
+        if (same != null && same.hash() != null && entry.hash() != null && same.hashAlgorithm() == entry.hashAlgorithm()
+            && same.hash().equals(entry.hash()))
           hits.add(Map.entry(medium.getKey(), entry));
       }
     }

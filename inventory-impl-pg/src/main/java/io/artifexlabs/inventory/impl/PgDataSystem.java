@@ -37,12 +37,14 @@ import java.util.concurrent.CompletionStage;
 
 import io.artifexlabs.inventory.api.DataEntry;
 import io.artifexlabs.inventory.api.DataInfo;
+import io.artifexlabs.inventory.api.DataTree;
 import io.artifexlabs.inventory.api.DataSystem;
 import io.artifexlabs.inventory.api.HashAlgorithm;
 import io.artifexlabs.inventory.api.MediaKind;
 import io.artifexlabs.inventory.api.Ulid;
 
 import io.smallrye.mutiny.Uni;
+import io.vertx.mutiny.core.buffer.Buffer;
 import io.vertx.mutiny.sqlclient.Row;
 import io.vertx.mutiny.sqlclient.RowSet;
 import io.vertx.mutiny.sqlclient.SqlConnection;
@@ -75,8 +77,44 @@ public class PgDataSystem implements DataSystem {
 
   private final static String INSERT_ENTRY = """
       INSERT INTO data_entries
-        (item_id, path_ids, path_hash, path_text, size_bytes, hash_alg, hash, mime_id, modified_at, is_archive)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)""";
+        (item_id, path_ids, path_hash, path_text, size_bytes, hash_alg, hash, mime_id, modified_at, is_archive,
+         hash_state)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)""";
+
+  /**
+   * Park this medium's completed hashes before the listing is torn down. Without this, re-describing a disc discards
+   * weeks of hashing — and via retireArchives, every archive on it too. A temp table rather than a Java map because a
+   * large medium is millions of rows: carrying them through the client to put them straight back is the kind of round
+   * trip the dictionary encoding exists to avoid.
+   */
+  /** storeScope recurses for every archive, and each call parks its own scope's hashes. */
+  private final static String DROP_CARRIED = "DROP TABLE IF EXISTS carried_hashes";
+
+  private final static String PARK_HASHES = """
+      CREATE TEMP TABLE carried_hashes ON COMMIT DROP AS
+        SELECT path_hash, size_bytes, modified_at, hash, hash_alg, hashed_at, hash_state
+          FROM data_entries WHERE item_id=$1 AND hash_state <> 0""";
+
+  /**
+   * Give them back to the rows that describe the SAME file. "Same" is (path, size, mtime): a file whose size or
+   * timestamp moved is a different file that happens to share a name, and silently keeping its old digest would be a
+   * lie the system could never detect. IS NOT DISTINCT FROM so two NULL mtimes still count as equal.
+   */
+  private final static String CARRY_HASHES = """
+      UPDATE data_entries e
+         SET hash = c.hash, hash_alg = c.hash_alg, hashed_at = c.hashed_at, hash_state = c.hash_state
+        FROM carried_hashes c
+       WHERE e.item_id = $1 AND e.path_hash = c.path_hash
+         AND e.size_bytes = c.size_bytes
+         AND e.modified_at IS NOT DISTINCT FROM c.modified_at""";
+
+  private final static String DELETE_DIRS = "DELETE FROM data_dirs WHERE item_id=$1";
+
+  private final static String INSERT_DIR = """
+      INSERT INTO data_dirs
+        (item_id, path_ids, path_hash, path_text, depth, structure_hash,
+         subtree_files, subtree_bytes, pending_files)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)""";
 
   private final static String SELECT_SCOPE = """
       SELECT path_text, size_bytes, hash_alg, hash, modified_at, is_archive,
@@ -106,6 +144,45 @@ public class PgDataSystem implements DataSystem {
         JOIN items i ON i.id = o.item_id
        WHERE o.item_id <> $1
        ORDER BY i.name, o.path_text""";
+
+  /**
+   * Subtrees whose identity occurs in more than one PLACE. Grouped in SQL rather than in Java because the answer is
+   * "this folder appears N times" — pulling every row back to group them client-side is what made findMirrorsOf a
+   * Parallel Seq Scan returning millions of rows to answer a yes/no.
+   *
+   * <p>
+   * $1 picks the column (1 structure, 2 merkle, 3 content-only), $2 the medium or null for the whole inventory, $3 the
+   * scope, then the floors. A directory is excluded from matching ITSELF by path_hash, not by item_id — within one
+   * medium the same subtree at two paths is exactly what we are hunting.
+   */
+  private final static String SECTIONS = """
+      WITH candidate AS (
+        SELECT d.item_id, d.path_text, d.depth, d.subtree_files, d.subtree_bytes,
+               CASE $1::int WHEN 1 THEN d.structure_hash WHEN 2 THEN d.merkle_hash
+                            ELSE d.merkle_content_hash END AS ident
+          FROM data_dirs d
+         WHERE d.subtree_files >= $4::bigint AND d.subtree_bytes >= $5::bigint AND d.depth >= $6::int
+      ), grouped AS (
+        SELECT ident,
+               count(*) AS places,
+               count(DISTINCT item_id) AS media,
+               max(subtree_files) AS files,
+               max(subtree_bytes) AS bytes
+          FROM candidate WHERE ident IS NOT NULL
+         GROUP BY ident
+        HAVING count(*) > 1
+      )
+      SELECT encode(g.ident,'hex') AS ident_hex, g.files, g.bytes,
+             c.item_id, c.path_text, c.depth, i.name AS item_name
+        FROM grouped g
+        JOIN candidate c ON c.ident = g.ident
+        JOIN items i ON i.id = c.item_id
+       WHERE ($2::varchar IS NULL OR EXISTS (
+               SELECT 1 FROM candidate mine WHERE mine.ident = g.ident AND mine.item_id = $2::varchar))
+         AND ($3::int = 3
+              OR ($3::int = 1 AND g.media > 1)
+              OR ($3::int = 2 AND g.places > g.media))
+       ORDER BY g.bytes DESC, g.files DESC, encode(g.ident,'hex'), i.name, c.path_text""";
 
   private final static String RENAME_SELECT = """
       SELECT path_text FROM data_entries
@@ -142,7 +219,16 @@ public class PgDataSystem implements DataSystem {
     return this.pool.withTransaction(conn -> holdsData(conn, itemId).flatMap(ok -> {
       if (!ok)
         return Uni.createFrom().item(Optional.<Integer>empty());
-      // the medium is being re-described: last description's archive items go
+      // The medium is being re-described: last description's archive items go.
+      //
+      // KNOWN GAP (stage 2 owns it): this runs BEFORE storeScope, and deleting an
+      // archive item cascade-deletes its data_entries — so an archive's hashes
+      // are gone before storeScope can park them, and the replacement archive
+      // gets a fresh ULID besides. The medium's OWN hashes survive a re-describe;
+      // its archives' do not. Harmless today because nothing hashes inside an
+      // archive until the stage-2 scanner exists, and that is the change that
+      // should fix it — by parking inner hashes against the archive's PATH in
+      // this manifest rather than against an item id that will not survive.
       return retireArchives(conn, itemId).flatMap(v -> storeScope(conn, itemId, submitted)).flatMap(count -> audit(conn,
           "data.replace", itemId, new JsonObject().put("entries", count).put("bytes", totalBytes(submitted))
               .put("archives", (int) submitted.stream().filter(DataEntry::isArchive).count()))
@@ -152,13 +238,24 @@ public class PgDataSystem implements DataSystem {
 
   /** One scope's rows, minting an item per archive and recursing into it. */
   private Uni<Integer> storeScope(SqlConnection conn, String itemId, List<DataEntry> entries) {
-    return conn.preparedQuery(DELETE_SCOPE).execute(Tuple.of(itemId))
+    return conn.query(DROP_CARRIED).execute()
+        .flatMap(dropped -> conn.preparedQuery(PARK_HASHES).execute(Tuple.of(itemId)))
+        .flatMap(parked -> conn.preparedQuery(DELETE_SCOPE).execute(Tuple.of(itemId)))
         .flatMap(deleted -> dictionaries(conn, entries).flatMap(dict -> {
           List<Tuple> rows = new ArrayList<>(entries.size());
           for (DataEntry e : entries)
             rows.add(entryTuple(itemId, e, dict));
           Uni<Integer> inserted = rows.isEmpty() ? Uni.createFrom().item(0)
               : conn.preparedQuery(INSERT_ENTRY).executeBatch(rows).map(r -> entries.size());
+          // Directory rows are derived, not supplied: a manifest is flat, and the
+          // tree it implies is what makes "is this folder a copy of that one"
+          // answerable. Same transaction as the entries — a manifest and its tree
+          // disagreeing would be worse than either being absent.
+          // hashes come back BEFORE the tree is derived, so pending_files is
+          // seeded from what is actually still unhashed rather than assuming a
+          // re-described medium starts from zero again
+          inserted = inserted.flatMap(count -> conn.preparedQuery(CARRY_HASHES).execute(Tuple.of(itemId))
+              .flatMap(carried -> storeDirs(conn, itemId, entries, dict)).map(v -> count));
           return inserted.flatMap(count -> {
             Uni<Integer> chain = Uni.createFrom().item(count);
             for (DataEntry entry : entries) {
@@ -264,6 +361,48 @@ public class PgDataSystem implements DataSystem {
   }
 
   @Override
+  public CompletionStage<List<SectionMatch>> findDuplicateSections(SectionQuery q) {
+    short column = switch (q.match()) {
+    case STRUCTURE -> 1;
+    case MERKLE -> 2;
+    case CONTENT -> 3;
+    };
+    short scope = switch (q.scope()) {
+    case ACROSS_MEDIA -> 1;
+    case WITHIN_MEDIUM -> 2;
+    case BOTH -> 3;
+    };
+    return this.pool
+        .withConnection(
+            conn -> conn.preparedQuery(SECTIONS)
+                .execute(Tuple.of(column, q.itemId(), scope, (long) Math.max(q.minFiles(), 0),
+                    Math.max(q.minBytes(), 0L), q.minDepth())))
+        .map(rows -> groupSections(rows, q)).subscribeAsCompletionStage();
+  }
+
+  /** Fold the flat join back into one entry per identity, preserving the SQL ordering. */
+  private static List<SectionMatch> groupSections(RowSet<Row> rows, SectionQuery q) {
+    Map<String, List<SectionLocation>> places = new LinkedHashMap<>();
+    Map<String, long[]> sizes = new LinkedHashMap<>();
+    for (Row r : rows) {
+      String ident = r.getString("ident_hex");
+      places.computeIfAbsent(ident, k -> new ArrayList<>()).add(new SectionLocation(r.getString("item_id"),
+          r.getString("item_name"), r.getString("path_text"), r.getInteger("depth")));
+      sizes.computeIfAbsent(ident, k -> new long[] {
+          r.getLong("files"), r.getLong("bytes")
+      });
+    }
+    List<SectionMatch> out = new ArrayList<>();
+    for (Map.Entry<String, List<SectionLocation>> e : places.entrySet()) {
+      long[] sz = sizes.get(e.getKey());
+      out.add(new SectionMatch(e.getKey(), sz[0], sz[1], List.copyOf(e.getValue())));
+    }
+    int from = Math.min(Math.max(q.page(), 0) * Math.max(q.size(), 1), out.size());
+    int to = Math.min(from + Math.max(q.size(), 1), out.size());
+    return List.copyOf(out.subList(from, to));
+  }
+
+  @Override
   public CompletionStage<List<DataLocation>> findMirrorsOf(String itemId) {
     return this.pool
         .withConnection(conn -> conn.preparedQuery(MIRRORS).execute(Tuple.of(itemId)).map(PgDataSystem::readLocations))
@@ -288,22 +427,34 @@ public class PgDataSystem implements DataSystem {
    * Look up or create each name, returning name → id. Append-only: an existing row is REUSED, never rewritten, because
    * other entries already point at its id.
    */
+  /**
+   * Intern a whole vocabulary in TWO round trips: one array insert, one array lookup.
+   *
+   * <p>
+   * This used to build a flatMap chain with one link per name, each doing its own INSERT and SELECT. With a handful of
+   * test paths that was invisible; with a real manifest it is fatal twice over — 80,000 paths carry roughly 100,000
+   * distinct components, which meant a 100,000-deep Uni chain (a StackOverflowError on subscribe) and 200,000
+   * sequential round trips (a load that never finished). Found by running an actual medium through it rather than a
+   * fixture.
+   *
+   * <p>
+   * ON CONFLICT DO NOTHING keeps the append-only contract: a component already present keeps its id, because other
+   * entries' {@code path_ids} still point at it and reassigning one would silently repath files nobody touched.
+   */
   private Uni<Map<String, Long>> intern(SqlConnection conn, String table, Set<String> names) {
     Map<String, Long> ids = new LinkedHashMap<>();
     if (names.isEmpty())
       return Uni.createFrom().item(ids);
-    Uni<Void> chain = Uni.createFrom().voidItem();
-    for (String name : names)
-      chain = chain
-          .flatMap(v -> conn.preparedQuery("INSERT INTO " + table + " (name) VALUES ($1) ON CONFLICT (name) DO NOTHING")
-              .execute(Tuple.of(name))
-              .flatMap(
-                  ignored -> conn.preparedQuery("SELECT id FROM " + table + " WHERE name=$1").execute(Tuple.of(name)))
-              .map(rows -> {
-                ids.put(name, rows.iterator().next().getLong("id"));
-                return (Void) null;
-              }));
-    return chain.map(v -> ids);
+    String[] all = names.toArray(new String[0]);
+    return conn
+        .preparedQuery("INSERT INTO " + table + " (name) SELECT unnest($1::text[]) ON CONFLICT (name) DO NOTHING")
+        .execute(Tuple.of(all)).flatMap(inserted -> conn
+            .preparedQuery("SELECT name, id FROM " + table + " WHERE name = ANY($1::text[])").execute(Tuple.of(all)))
+        .map(rows -> {
+          for (Row r : rows)
+            ids.put(r.getString("name"), r.getLong("id"));
+          return ids;
+        });
   }
 
   private record Dictionaries(Map<String, Long> pathElements, Map<String, Long> mimeTypes) {
@@ -311,16 +462,50 @@ public class PgDataSystem implements DataSystem {
 
   // ---- row mapping ------------------------------------------------------
 
+  /** hash_state: 0 pending, 1 done, 2 unreadable. An unhashed entry is normal, not an error. */
+  private final static short HASH_PENDING = 0;
+  private final static short HASH_DONE = 1;
+
+  /**
+   * Replace this medium's directory rows from the manifest it was just given. {@code pending_files} is seeded to the
+   * subtree's file count — every file starts unhashed — and from then on ONLY the bottom-up sweep writes it. An
+   * incremental counter would cost an update per ancestor per file (~15 on the measured tree, 781M at 50M files) and
+   * would make the root a row every hasher contends on.
+   */
+  private Uni<Void> storeDirs(SqlConnection conn, String itemId, List<DataEntry> entries, Dictionaries dict) {
+    return conn.preparedQuery(DELETE_DIRS).execute(Tuple.of(itemId)).flatMap(gone -> {
+      List<DataTree.Node> nodes = DataTree.build(HashAlgorithm.SHA256, entries);
+      if (nodes.isEmpty())
+        return Uni.createFrom().voidItem();
+      List<Tuple> rows = new ArrayList<>(nodes.size());
+      for (DataTree.Node n : nodes)
+        rows.add(Tuple.from(new Object[] {
+            itemId, pathIds(n.path(), dict.pathElements()), digest(n.path()), n.path(), n.depth(), n.structureHash(),
+            n.subtreeFiles(), n.subtreeBytes(), n.subtreeFiles()
+        }));
+      return conn.preparedQuery(INSERT_DIR).executeBatch(rows).replaceWithVoid();
+    });
+  }
+
   private static Tuple entryTuple(String itemId, DataEntry e, Dictionaries dict) {
     Long mimeId = e.mime().map(dict.mimeTypes()::get).orElse(null);
+    // a manifest may arrive before anything is hashed (find describes a tree in
+    // minutes; hashing it takes weeks), so hash/hash_alg are null together and
+    // hash_state records which of the two situations this row is in
+    boolean hashed = e.hash() != null;
     return Tuple.from(new Object[] {
         itemId, pathIds(e.path(), dict.pathElements()), digest(e.path()), e.path(), e.sizeBytes(),
-        (short) e.hashAlgorithm().id(), hexToBytes(e.hash()), mimeId,
-        e.modified().map(i -> OffsetDateTime.ofInstant(i, ZoneOffset.UTC)).orElse(null), e.isArchive()
+        hashed ? (short) e.hashAlgorithm().id() : null, hashed ? hexToBytes(e.hash()) : null, mimeId,
+        e.modified().map(i -> OffsetDateTime.ofInstant(i, ZoneOffset.UTC)).orElse(null), e.isArchive(),
+        hashed ? HASH_DONE : HASH_PENDING
     });
   }
 
   private static Long[] pathIds(String path, Map<String, Long> elements) {
+    // the medium root has no components at all; "".split("/") yields [""] , which
+    // would intern an empty component and store {NULL} in a bigint[]
+    if (path.isEmpty())
+      return new Long[0];
     String[] parts = path.split("/");
     Long[] ids = new Long[parts.length];
     for (int i = 0; i < parts.length; i++)
@@ -331,13 +516,17 @@ public class PgDataSystem implements DataSystem {
   private static List<DataEntry> readEntries(RowSet<Row> rows) {
     List<DataEntry> out = new ArrayList<>();
     for (Row r : rows) {
-      HashAlgorithm algorithm = HashAlgorithm.byId(r.get(Short.class, "hash_alg").intValue())
-          .orElse(HashAlgorithm.SHA256);
+      // hash and hash_alg are null together until the async hasher reaches this
+      // file — the normal state of a freshly described medium, not a bad row
+      Short algId = r.get(Short.class, "hash_alg");
+      Buffer digest = r.getBuffer("hash");
+      HashAlgorithm algorithm = algId == null ? null
+          : HashAlgorithm.byId(algId.intValue()).orElse(HashAlgorithm.SHA256);
       OffsetDateTime modified = r.getOffsetDateTime("modified_at");
       // archiveContents is NOT rehydrated here: a nested scope is its own
       // item with its own manifest, reachable by asking for that item
       out.add(new DataEntry(r.getString("path_text"), r.getLong("size_bytes"), algorithm,
-          bytesToHex(r.getBuffer("hash").getBytes()), r.getString("mime_name"),
+          digest == null ? null : bytesToHex(digest.getBytes()), r.getString("mime_name"),
           modified == null ? null : modified.toInstant(), List.of()));
     }
     return List.copyOf(out);

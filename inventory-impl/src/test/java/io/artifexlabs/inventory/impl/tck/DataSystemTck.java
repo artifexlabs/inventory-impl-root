@@ -158,6 +158,142 @@ public abstract class DataSystemTck {
         "same content at a different path is not a mirror");
   }
 
+  // ---- duplicated sections (DATA_MERKLE.md stage 1) ----------------------
+  //
+  // The question findMirrorsOf structurally could not answer. It compares files
+  // at the SAME path, so a folder copied elsewhere is invisible to it; here a
+  // subtree carries its own identity and location is irrelevant.
+
+  private static DataEntry sized(String path, long bytes) {
+    return new DataEntry(path, bytes, null, null, null, null, List.of());
+  }
+
+  /** Ten files so a section clears the default size floor of 8. */
+  private static List<DataEntry> tenUnder(String prefix) {
+    List<DataEntry> out = new java.util.ArrayList<>();
+    for (int i = 0; i < 10; i++)
+      out.add(sized(prefix + "/f" + i + ".bin", 100L + i));
+    return out;
+  }
+
+  @Test
+  public void aRelocatedSubtreeIsFoundEvenThoughItsPathDiffers() throws Exception {
+    String discA = medium("disc-a");
+    String discB = medium("disc-b");
+    await(system().replaceManifest(discA, tenUnder("photos/2019")));
+    // same ten files, same names and sizes, buried somewhere else entirely
+    await(system().replaceManifest(discB, tenUnder("backup/old/photos/2019")));
+
+    List<DataSystem.SectionMatch> found = await(
+        system().findDuplicateSections(DataSystem.SectionQuery.sane(null, DataSystem.Match.STRUCTURE)));
+
+    assertTrue(found.stream().anyMatch(m -> m.subtreeFiles() == 10), "the ten-file subtree should be reported");
+    DataSystem.SectionMatch match = found.stream().filter(m -> m.subtreeFiles() == 10).findFirst().orElseThrow();
+    List<String> paths = match.locations().stream().map(DataSystem.SectionLocation::path).sorted().toList();
+    assertEquals(List.of("backup/old/photos/2019", "photos/2019"), paths,
+        "the SAME folder in a different place is the same folder — this is the whole point");
+  }
+
+  @Test
+  public void theSizeFloorSuppressesCoincidentalMatches() throws Exception {
+    String discA = medium("disc-a");
+    String discB = medium("disc-b");
+    // one identical file each: a real match, and a meaningless one
+    await(system().replaceManifest(discA, List.of(sized("project/pom.xml", 500L))));
+    await(system().replaceManifest(discB, List.of(sized("other/pom.xml", 500L))));
+
+    List<DataSystem.SectionMatch> floored = await(
+        system().findDuplicateSections(DataSystem.SectionQuery.sane(null, DataSystem.Match.STRUCTURE)));
+    assertTrue(floored.isEmpty(),
+        "a 'duplicated section' of one pom.xml is coincidence: 7,492 such directories exist on one real tree");
+
+    List<DataSystem.SectionMatch> unfloored = await(system().findDuplicateSections(
+        new DataSystem.SectionQuery(null, DataSystem.Match.STRUCTURE, DataSystem.Scope.BOTH, 1, 0L, 0, 0, 50)));
+    assertTrue(!unfloored.isEmpty(), "and without the floor it IS reported — the floor is doing the work, not luck");
+  }
+
+  @Test
+  public void duplicationWithinOneMediumIsFound() throws Exception {
+    String disc = medium("snapshot-disc");
+    // the shape a snapshotting filesystem produces: generations of one tree on
+    // ONE medium, which is where that inventory's duplication actually lives
+    List<DataEntry> both = new java.util.ArrayList<>(tenUnder("snapshots/5160/home"));
+    both.addAll(tenUnder("snapshots/5161/home"));
+    await(system().replaceManifest(disc, both));
+
+    List<DataSystem.SectionMatch> found = await(system().findDuplicateSections(new DataSystem.SectionQuery(null,
+        DataSystem.Match.STRUCTURE, DataSystem.Scope.WITHIN_MEDIUM, 8, 0L, 0, 0, 50)));
+
+    DataSystem.SectionMatch match = found.stream().filter(m -> m.subtreeFiles() == 10).findFirst()
+        .orElseThrow(() -> new AssertionError("a subtree repeated on the same medium must be found"));
+    assertEquals(2, match.locations().size());
+    assertEquals(List.of(disc, disc), match.locations().stream().map(DataSystem.SectionLocation::itemId).toList(),
+        "both copies are on the same medium: self-matching is excluded by PATH, not by item");
+  }
+
+  @Test
+  public void differentSizesUnderTheSameNamesAreNotAMatch() throws Exception {
+    String discA = medium("disc-a");
+    String discB = medium("disc-b");
+    await(system().replaceManifest(discA, tenUnder("book")));
+    List<DataEntry> resized = new java.util.ArrayList<>();
+    for (int i = 0; i < 10; i++)
+      resized.add(sized("book/f" + i + ".bin", 9000L + i)); // same names, different sizes
+    await(system().replaceManifest(discB, resized));
+
+    List<DataSystem.SectionMatch> found = await(
+        system().findDuplicateSections(DataSystem.SectionQuery.sane(null, DataSystem.Match.STRUCTURE)));
+    assertTrue(found.stream().noneMatch(m -> m.locations().size() > 1),
+        "decision 2: size is in the structure digest, so identically-named but differently-sized trees differ");
+  }
+
+  @Test
+  public void merkleMatchingIsEmptyUntilFilesAreHashed() throws Exception {
+    String discA = medium("disc-a");
+    String discB = medium("disc-b");
+    await(system().replaceManifest(discA, tenUnder("photos")));
+    await(system().replaceManifest(discB, tenUnder("photos")));
+
+    assertTrue(
+        await(system().findDuplicateSections(DataSystem.SectionQuery.sane(null, DataSystem.Match.MERKLE))).isEmpty(),
+        "a content Merkle cannot exist before the bytes are read; empty is the honest answer");
+  }
+
+  // ---- hashes survive a re-describe -------------------------------------
+
+  @Test
+  public void reDescribingAMediumKeepsHashesForFilesThatDidNotChange() throws Exception {
+    String disc = medium("backup-01");
+    // as if the hasher had already run over this medium
+    await(system().replaceManifest(disc, List.of(file("docs/a.txt", HASH_A), file("docs/b.txt", HASH_B))));
+
+    // re-scanned: same files, same sizes, and this time the manifest carries no
+    // hashes at all — which is what a find-shaped scan produces
+    await(system().replaceManifest(disc, List.of(sized("docs/a.txt", 100L), sized("docs/b.txt", 100L))));
+
+    List<DataEntry> after = await(system().entriesOf(disc, null, 0, 50));
+    assertEquals(2, after.size());
+    assertTrue(after.stream().allMatch(e -> e.hash() != null),
+        "hashing a medium takes weeks; re-scanning it must not throw that away");
+    assertEquals(HASH_A, after.stream().filter(e -> e.path().equals("docs/a.txt")).findFirst().orElseThrow().hash());
+  }
+
+  @Test
+  public void aFileWhoseSizeChangedLosesItsHash() throws Exception {
+    String disc = medium("backup-01");
+    await(system().replaceManifest(disc, List.of(file("docs/a.txt", HASH_A), file("docs/b.txt", HASH_B))));
+
+    // a.txt is a different file now, and only its size says so
+    await(system().replaceManifest(disc, List.of(sized("docs/a.txt", 999L), sized("docs/b.txt", 100L))));
+
+    List<DataEntry> after = await(system().entriesOf(disc, null, 0, 50));
+    DataEntry changed = after.stream().filter(e -> e.path().equals("docs/a.txt")).findFirst().orElseThrow();
+    DataEntry same = after.stream().filter(e -> e.path().equals("docs/b.txt")).findFirst().orElseThrow();
+    assertEquals(null, changed.hash(),
+        "keeping a digest for a file whose size moved would be a lie nothing could later detect");
+    assertEquals(HASH_B, same.hash(), "and its unchanged neighbour is untouched");
+  }
+
   @Test
   public void renamingAPathKeepsTheContentHash() throws Exception {
     String disc = medium("backup-01");

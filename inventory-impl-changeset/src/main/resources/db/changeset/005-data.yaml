@@ -95,16 +95,39 @@ databaseChangeLog:
                   type: bigint
                   constraints:
                     nullable: false
+              # NULL until the async hasher reaches this file. There was no way to
+              # say "known to exist, not yet hashed" before, which is the whole
+              # premise of hashing a 120 TB tree over weeks.
               - column:
                   name: hash_alg
                   type: smallint
-                  constraints:
-                    nullable: false
               - column:
                   name: hash
                   type: bytea
+              - column:
+                  name: hashed_at
+                  type: timestamptz
+              # 0 pending, 1 done, 2 unreadable. Unreadable is NOT a failure to
+              # retry forever: it is recorded in data_unreadable and becomes a
+              # repair target, because a file this medium cannot read may be
+              # readable on a sibling copy.
+              - column:
+                  name: hash_state
+                  type: smallint
+                  defaultValueNumeric: 0
                   constraints:
                     nullable: false
+              # An archive is a file AND a container. mintArchive names the item
+              # after the BASENAME, so two backup.zip at different paths on one
+              # medium are indistinguishable by name+containment — fine while
+              # archives were opaque, not fine once their trees participate in
+              # matching.
+              - column:
+                  name: archive_item_id
+                  type: varchar(26)
+                  constraints:
+                    references: items(id)
+                    foreignKeyName: fk_data_entries_archive
               - column:
                   name: mime_id
                   type: int
@@ -150,7 +173,192 @@ databaseChangeLog:
                   name: item_id
               - column:
                   name: path_text
+        # Substring search over a listing is a LEADING-wildcard LIKE, which no
+        # btree can serve: measured at 745 ms on 5.5M rows (Parallel Seq Scan),
+        # held to ~40 ms by this index. Costs ~217 bytes/row.
+        - sql:
+            sql: CREATE EXTENSION IF NOT EXISTS pg_trgm
+            rollbackSql: SELECT 1
+        - sql:
+            sql: >-
+              CREATE INDEX idx_data_entries_trgm ON data_entries
+              USING gin (lower(path_text) gin_trgm_ops)
+            rollbackSql: DROP INDEX IF EXISTS idx_data_entries_trgm
+
+        # Directories become entities. Until now a directory existed only as a
+        # shared prefix of path strings, so there was nothing to compare when
+        # asking whether two SECTIONS match — which is why relocated duplicate
+        # subtrees were undetectable rather than merely slow to find.
+        - createTable:
+            tableName: data_dirs
+            columns:
+              - column:
+                  name: item_id
+                  type: varchar(26)
+                  constraints:
+                    nullable: false
+                    references: items(id)
+                    foreignKeyName: fk_data_dirs_item
+                    deleteCascade: true
+              # the component-id sequence: this is what finally READS
+              # path_elements, which until now was written and never consulted
+              - column:
+                  name: path_ids
+                  type: bigint[]
+                  constraints:
+                    nullable: false
+              - column:
+                  name: path_hash
+                  type: bytea
+                  constraints:
+                    nullable: false
+              - column:
+                  name: path_text
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: depth
+                  type: int
+                  constraints:
+                    nullable: false
+              # available AT INGEST from paths alone: H over names and sizes.
+              # This is the day-one answer, before any byte has been read.
+              - column:
+                  name: structure_hash
+                  type: bytea
+                  constraints:
+                    nullable: false
+              # NULL until every descendant is hashed; then bottom-up
+              - column:
+                  name: merkle_hash
+                  type: bytea
+              # the rename-surviving variant: names omitted from the digest
+              - column:
+                  name: merkle_content_hash
+                  type: bytea
+              - column:
+                  name: hash_alg
+                  type: smallint
+              # the size floor reads these; without one, matching returns mostly
+              # coincidence (46.7% of real directories hold <= 2 files)
+              - column:
+                  name: subtree_files
+                  type: bigint
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: subtree_bytes
+                  type: bigint
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              # zero = the Merkle is computable. Written ONLY by the bottom-up
+              # sweep, never per-file: an incremental counter would cost ~15
+              # ancestor updates per file and make the root a hot row every
+              # hasher contends on.
+              - column:
+                  name: pending_files
+                  type: bigint
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: unreadable_files
+                  type: bigint
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              # H(sorted[path_hash of unreadable descendants]). Makes
+              # "identically damaged" an O(1) compare, so comparing two PARTIAL
+              # directories is sound by construction rather than by every query
+              # remembering to honour a flag.
+              - column:
+                  name: unreadable_hash
+                  type: bytea
+        - addPrimaryKey:
+            tableName: data_dirs
+            columnNames: item_id, path_hash
+            constraintName: pk_data_dirs
+        # partial indexes: the size floor is baked in so they stay small
+        - sql:
+            sql: >-
+              CREATE INDEX idx_data_dirs_structure ON data_dirs (structure_hash)
+              WHERE subtree_files >= 8
+            rollbackSql: DROP INDEX IF EXISTS idx_data_dirs_structure
+        - sql:
+            sql: >-
+              CREATE INDEX idx_data_dirs_merkle ON data_dirs (merkle_hash)
+              WHERE merkle_hash IS NOT NULL
+            rollbackSql: DROP INDEX IF EXISTS idx_data_dirs_merkle
+        - sql:
+            sql: >-
+              CREATE INDEX idx_data_dirs_merkle_content ON data_dirs (merkle_content_hash)
+              WHERE merkle_content_hash IS NOT NULL
+            rollbackSql: DROP INDEX IF EXISTS idx_data_dirs_merkle_content
+        - createIndex:
+            tableName: data_dirs
+            indexName: idx_data_dirs_item_path
+            columns:
+              - column:
+                  name: item_id
+              - column:
+                  name: path_text
+
+        # What exactly could not be read, and when. The count and digest on
+        # data_dirs answer "is this partial, and identically so?"; this answers
+        # "what is missing, and can a sibling medium supply it?" — the repair
+        # index. Keyed by PATH because an unhashed file has no content hash, so
+        # path is the only handle that exists.
+        - createTable:
+            tableName: data_unreadable
+            columns:
+              - column:
+                  name: item_id
+                  type: varchar(26)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: path_hash
+                  type: bytea
+                  constraints:
+                    nullable: false
+              - column:
+                  name: first_seen
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+              - column:
+                  name: last_attempt
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+              - column:
+                  name: attempts
+                  type: int
+                  defaultValueNumeric: 1
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reason
+                  type: text
+        - addPrimaryKey:
+            tableName: data_unreadable
+            columnNames: item_id, path_hash
+            constraintName: pk_data_unreadable
+        - addForeignKeyConstraint:
+            baseTableName: data_unreadable
+            baseColumnNames: item_id, path_hash
+            referencedTableName: data_entries
+            referencedColumnNames: item_id, path_hash
+            constraintName: fk_data_unreadable_entry
+            onDelete: CASCADE
       rollback:
+        - dropTable:
+            tableName: data_unreadable
+        - dropTable:
+            tableName: data_dirs
         - dropTable:
             tableName: data_entries
         - dropTable:

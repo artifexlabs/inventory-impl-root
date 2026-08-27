@@ -87,4 +87,20 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
+
+  <build>
+    <testResources>
+      <testResource>
+        <directory>src/test/resources</directory>
+        <!-- measurements/ is developer TOOLING, not classpath resources: a
+             measurement script, its recorded runs, and whatever multi-gigabyte
+             `find` output someone drops beside them. Copying that into
+             target/test-classes is pointless at best, and Maven's resource
+             filtering dies on the non-UTF-8 bytes real filenames contain. -->
+        <excludes>
+          <exclude>measurements/**</exclude>
+        </excludes>
+      </testResource>
+    </testResources>
+  </build>
 </project>
