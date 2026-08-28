@@ -83,9 +83,8 @@ public class PgDataSystem implements DataSystem {
 
   /**
    * Park this medium's completed hashes before the listing is torn down. Without this, re-describing a disc discards
-   * weeks of hashing — and via retireArchives, every archive on it too. A temp table rather than a Java map because a
-   * large medium is millions of rows: carrying them through the client to put them straight back is the kind of round
-   * trip the dictionary encoding exists to avoid.
+   * weeks of hashing. A temp table rather than a Java map because a large medium is millions of rows: carrying them
+   * through the client to put them straight back is the kind of round trip the dictionary encoding exists to avoid.
    */
   /** storeScope recurses for every archive, and each call parks its own scope's hashes. */
   private final static String DROP_CARRIED = "DROP TABLE IF EXISTS carried_hashes";
@@ -107,6 +106,66 @@ public class PgDataSystem implements DataSystem {
        WHERE e.item_id = $1 AND e.path_hash = c.path_hash
          AND e.size_bytes = c.size_bytes
          AND e.modified_at IS NOT DISTINCT FROM c.modified_at""";
+
+  /**
+   * The archive items the LAST description of this scope minted, keyed by the path each one sat at. Read before the
+   * scope is torn down, because that is the only moment at which both the old rows and the new manifest exist.
+   *
+   * <p>
+   * An archive's identity on a medium is its PATH, not its basename — {@link #mintArchive} names the item after the
+   * basename alone, so two {@code backup.zip} in different folders are indistinguishable by name. Reusing the item id
+   * when a path comes back is what lets the ordinary park/carry keep the hashes computed INSIDE an archive: the inner
+   * scope is keyed by that id, and a fresh ULID would strand every digest under it.
+   */
+  private final static String SURVIVING_ARCHIVES = """
+      SELECT path_text, archive_item_id FROM data_entries
+       WHERE item_id=$1 AND archive_item_id IS NOT NULL""";
+
+  /** Point this scope's row for the archive FILE at the item carrying the archive's contents. */
+  private final static String LINK_ARCHIVE = "UPDATE data_entries SET archive_item_id=$3 WHERE item_id=$1 AND path_text=$2";
+
+  /**
+   * Archive items under this scope that the new description did not claim, parents before children.
+   *
+   * <p>
+   * The order is load-bearing. Deleting an archive item cascades away its own {@code data_entries}, and those rows are
+   * what point at any NESTED archive through {@code archive_item_id}; delete the child first and that reference is
+   * still live, so the foreign key refuses. {@code fk_items_container} is ON DELETE SET NULL, so the subtree does not
+   * collapse on its own either — every descendant has to be named, and named in the right order.
+   */
+  private final static String ORPHAN_ARCHIVES = """
+      WITH RECURSIVE orphan AS (
+        SELECT id, 0 AS depth FROM items
+         WHERE container_id = $1 AND data_archive = true AND id <> ALL($2::varchar[])
+        UNION ALL
+        SELECT c.id, o.depth + 1 FROM items c JOIN orphan o ON c.container_id = o.id
+         WHERE c.data_archive = true
+      )
+      SELECT id FROM orphan ORDER BY depth""";
+
+  /**
+   * Park the repair index the same way hashes are parked, and for the same reason. {@code data_unreadable} cascades
+   * from {@code data_entries}, so DELETE_SCOPE takes it with the listing — and the repair index is the ACTIONABLE
+   * artifact of every unreadable file, rebuilt only by reading the medium again. Losing it on every re-scan would
+   * quietly undo the reason unreadable is an outcome rather than an error.
+   */
+  private final static String PARK_DAMAGE = """
+      CREATE TEMP TABLE carried_damage ON COMMIT DROP AS
+        SELECT u.path_hash, e.size_bytes, e.modified_at, u.first_seen, u.last_attempt, u.attempts, u.reason
+          FROM data_unreadable u JOIN data_entries e
+            ON e.item_id = u.item_id AND e.path_hash = u.path_hash
+         WHERE u.item_id = $1""";
+
+  private final static String DROP_PARKED_DAMAGE = "DROP TABLE IF EXISTS carried_damage";
+
+  /** Same "is it still the same file" test the hashes use: path, size and mtime unchanged. */
+  private final static String CARRY_DAMAGE = """
+      INSERT INTO data_unreadable (item_id, path_hash, first_seen, last_attempt, attempts, reason)
+      SELECT $1, c.path_hash, c.first_seen, c.last_attempt, c.attempts, c.reason
+        FROM carried_damage c JOIN data_entries e
+          ON e.item_id = $1 AND e.path_hash = c.path_hash
+       WHERE e.size_bytes = c.size_bytes AND e.modified_at IS NOT DISTINCT FROM c.modified_at
+      ON CONFLICT (item_id, path_hash) DO NOTHING""";
 
   private final static String DELETE_DIRS = "DELETE FROM data_dirs WHERE item_id=$1";
 
@@ -134,16 +193,43 @@ public class PgDataSystem implements DataSystem {
        WHERE e.hash_alg=$1 AND e.hash=$2
        ORDER BY i.name, e.path_text""";
 
-  /** Same content AND same place as any row of $1, on some other medium. */
-  private final static String MIRRORS = """
-      SELECT o.item_id, o.path_text, o.size_bytes, i.name AS item_name
-        FROM data_entries o
-        JOIN data_entries mine
-          ON mine.item_id = $1 AND mine.path_hash = o.path_hash
-         AND mine.hash_alg = o.hash_alg AND mine.hash = o.hash
-        JOIN items i ON i.id = o.item_id
-       WHERE o.item_id <> $1
-       ORDER BY i.name, o.path_text""";
+  /**
+   * How much each other medium has in common with $1 — four numbers and a flag, not the millions of rows the old mirror
+   * query returned to say the same thing. The aggregation happens in SQL for the reason the measurement established:
+   * returning per-FILE rows to answer a per-MEDIUM question was a Parallel Seq Scan at every scale, and no index fixes
+   * a mismatch of shape.
+   *
+   * <p>
+   * "Shared" is still same path AND same digest. {@code identical} is a different and stronger claim — the two root
+   * Merkles agree, so the whole tree matches by name and content — which is why it comes from {@code data_dirs} and not
+   * from counting.
+   */
+  private final static String OVERLAP = """
+      WITH mine AS (
+        SELECT path_hash, hash_alg, hash, size_bytes FROM data_entries
+         WHERE item_id = $1 AND hash IS NOT NULL
+      ), ours AS (
+        SELECT count(*) AS n FROM mine
+      ), theirs AS (
+        SELECT item_id, count(*) AS n FROM data_entries
+         WHERE item_id <> $1 AND hash IS NOT NULL GROUP BY item_id
+      ), shared AS (
+        SELECT o.item_id, count(*) AS n, coalesce(sum(o.size_bytes), 0) AS bytes
+          FROM data_entries o
+          JOIN mine m ON m.path_hash = o.path_hash AND m.hash_alg = o.hash_alg AND m.hash = o.hash
+         WHERE o.item_id <> $1 AND o.hash IS NOT NULL
+         GROUP BY o.item_id
+      )
+      SELECT s.item_id, i.name AS item_name, s.n AS shared_entries, s.bytes AS shared_bytes,
+             t.n AS their_entries, (SELECT n FROM ours) AS our_entries,
+             coalesce(theirs_root.merkle_hash IS NOT NULL AND our_root.merkle_hash IS NOT NULL
+                      AND theirs_root.merkle_hash = our_root.merkle_hash, false) AS identical
+        FROM shared s
+        JOIN items i ON i.id = s.item_id
+        JOIN theirs t ON t.item_id = s.item_id
+        LEFT JOIN data_dirs theirs_root ON theirs_root.item_id = s.item_id AND theirs_root.path_text = ''
+        LEFT JOIN data_dirs our_root ON our_root.item_id = $1 AND our_root.path_text = ''
+       ORDER BY s.bytes DESC, s.n DESC, i.name""";
 
   /**
    * Subtrees whose identity occurs in more than one PLACE. Grouped in SQL rather than in Java because the answer is
@@ -154,31 +240,39 @@ public class PgDataSystem implements DataSystem {
    * $1 picks the column (1 structure, 2 merkle, 3 content-only), $2 the medium or null for the whole inventory, $3 the
    * scope, then the floors. A directory is excluded from matching ITSELF by path_hash, not by item_id — within one
    * medium the same subtree at two paths is exactly what we are hunting.
+   *
+   * <p>
+   * <b>The content flavours group by identity AND damage.</b> An unreadable file contributes nothing to a Merkle, so a
+   * damaged folder and an intact one holding only its readable half produce the same digest; grouping them together
+   * would report two media as copies when one is missing something the other has. STRUCTURE is read off the manifest
+   * and never sees damage, so it groups on identity alone — hence the CASE rather than an unconditional column.
    */
   private final static String SECTIONS = """
       WITH candidate AS (
         SELECT d.item_id, d.path_text, d.depth, d.subtree_files, d.subtree_bytes,
                CASE $1::int WHEN 1 THEN d.structure_hash WHEN 2 THEN d.merkle_hash
-                            ELSE d.merkle_content_hash END AS ident
+                            ELSE d.merkle_content_hash END AS ident,
+               CASE $1::int WHEN 1 THEN NULL ELSE d.unreadable_hash END AS damage
           FROM data_dirs d
          WHERE d.subtree_files >= $4::bigint AND d.subtree_bytes >= $5::bigint AND d.depth >= $6::int
       ), grouped AS (
-        SELECT ident,
+        SELECT ident, damage,
                count(*) AS places,
                count(DISTINCT item_id) AS media,
                max(subtree_files) AS files,
                max(subtree_bytes) AS bytes
           FROM candidate WHERE ident IS NOT NULL
-         GROUP BY ident
+         GROUP BY ident, damage
         HAVING count(*) > 1
       )
       SELECT encode(g.ident,'hex') AS ident_hex, g.files, g.bytes,
              c.item_id, c.path_text, c.depth, i.name AS item_name
         FROM grouped g
-        JOIN candidate c ON c.ident = g.ident
+        JOIN candidate c ON c.ident = g.ident AND c.damage IS NOT DISTINCT FROM g.damage
         JOIN items i ON i.id = c.item_id
        WHERE ($2::varchar IS NULL OR EXISTS (
-               SELECT 1 FROM candidate mine WHERE mine.ident = g.ident AND mine.item_id = $2::varchar))
+               SELECT 1 FROM candidate mine WHERE mine.ident = g.ident
+                 AND mine.damage IS NOT DISTINCT FROM g.damage AND mine.item_id = $2::varchar))
          AND ($3::int = 3
               OR ($3::int = 1 AND g.media > 1)
               OR ($3::int = 2 AND g.places > g.media))
@@ -219,27 +313,37 @@ public class PgDataSystem implements DataSystem {
     return this.pool.withTransaction(conn -> holdsData(conn, itemId).flatMap(ok -> {
       if (!ok)
         return Uni.createFrom().item(Optional.<Integer>empty());
-      // The medium is being re-described: last description's archive items go.
-      //
-      // KNOWN GAP (stage 2 owns it): this runs BEFORE storeScope, and deleting an
-      // archive item cascade-deletes its data_entries — so an archive's hashes
-      // are gone before storeScope can park them, and the replacement archive
-      // gets a fresh ULID besides. The medium's OWN hashes survive a re-describe;
-      // its archives' do not. Harmless today because nothing hashes inside an
-      // archive until the stage-2 scanner exists, and that is the change that
-      // should fix it — by parking inner hashes against the archive's PATH in
-      // this manifest rather than against an item id that will not survive.
-      return retireArchives(conn, itemId).flatMap(v -> storeScope(conn, itemId, submitted)).flatMap(count -> audit(conn,
-          "data.replace", itemId, new JsonObject().put("entries", count).put("bytes", totalBytes(submitted))
-              .put("archives", (int) submitted.stream().filter(DataEntry::isArchive).count()))
-          .map(ignored -> Optional.of(count)));
+      // Archive items are NOT retired up front. That is what used to make an
+      // archive's hashes unsaveable: deleting the item cascade-deleted its
+      // data_entries before storeScope could park them, and the replacement got
+      // a fresh ULID besides — so a medium's own hashes survived a re-describe
+      // and its archives' never could. storeScope now reuses the item sitting at
+      // a path that came back, and reaps only what this description dropped.
+      return storeScope(conn, itemId, submitted)
+          .flatMap(
+              count -> audit(conn, "data.replace", itemId,
+                  new JsonObject().put("entries", count).put("bytes", totalBytes(submitted)).put("archives",
+                      (int) submitted.stream().filter(DataEntry::isArchive).count()))
+                  .map(ignored -> Optional.of(count)));
     })).subscribeAsCompletionStage();
   }
 
-  /** One scope's rows, minting an item per archive and recursing into it. */
+  /** One scope's rows, reusing or minting an item per archive and recursing into it. */
   private Uni<Integer> storeScope(SqlConnection conn, String itemId, List<DataEntry> entries) {
-    return conn.query(DROP_CARRIED).execute()
+    // which archive item sat at which path, read while the old rows still exist
+    return conn.preparedQuery(SURVIVING_ARCHIVES).execute(Tuple.of(itemId)).flatMap(previous -> {
+      Map<String, String> archiveAt = new LinkedHashMap<>();
+      for (Row row : previous)
+        archiveAt.put(row.getString("path_text"), row.getString("archive_item_id"));
+      return storeScope(conn, itemId, entries, archiveAt);
+    });
+  }
+
+  private Uni<Integer> storeScope(SqlConnection conn, String itemId, List<DataEntry> entries,
+      Map<String, String> archiveAt) {
+    return conn.query(DROP_CARRIED).execute().flatMap(dropped -> conn.query(DROP_PARKED_DAMAGE).execute())
         .flatMap(dropped -> conn.preparedQuery(PARK_HASHES).execute(Tuple.of(itemId)))
+        .flatMap(parked -> conn.preparedQuery(PARK_DAMAGE).execute(Tuple.of(itemId)))
         .flatMap(parked -> conn.preparedQuery(DELETE_SCOPE).execute(Tuple.of(itemId)))
         .flatMap(deleted -> dictionaries(conn, entries).flatMap(dict -> {
           List<Tuple> rows = new ArrayList<>(entries.size());
@@ -251,20 +355,38 @@ public class PgDataSystem implements DataSystem {
           // tree it implies is what makes "is this folder a copy of that one"
           // answerable. Same transaction as the entries — a manifest and its tree
           // disagreeing would be worse than either being absent.
-          // hashes come back BEFORE the tree is derived, so pending_files is
-          // seeded from what is actually still unhashed rather than assuming a
-          // re-described medium starts from zero again
+          // hashes and damage both come back BEFORE the tree is derived, so a
+          // re-described medium keeps everything a worker already established.
+          // The tree's own content columns stay null until rollUp sweeps: what
+          // arrives here is the SUBMITTED manifest, which after a find re-scan
+          // carries no hashes at all, so deriving them from it would report a
+          // fully hashed medium as entirely pending
           inserted = inserted.flatMap(count -> conn.preparedQuery(CARRY_HASHES).execute(Tuple.of(itemId))
+              .flatMap(carried -> conn.preparedQuery(CARRY_DAMAGE).execute(Tuple.of(itemId)))
               .flatMap(carried -> storeDirs(conn, itemId, entries, dict)).map(v -> count));
           return inserted.flatMap(count -> {
+            // Reuse before mint. An archive still at the same path is the SAME
+            // archive, and its contents live in a scope keyed by its item id —
+            // so keeping the id is the whole of what keeps the hashes inside it.
+            Set<String> kept = new LinkedHashSet<>();
             Uni<Integer> chain = Uni.createFrom().item(count);
             for (DataEntry entry : entries) {
               if (!entry.isArchive())
                 continue;
-              chain = chain.flatMap(running -> mintArchive(conn, itemId, entry).flatMap(
-                  archiveId -> storeScope(conn, archiveId, entry.archiveContents()).map(inner -> running + inner)));
+              chain = chain.flatMap(running -> {
+                String existing = archiveAt.get(entry.path());
+                Uni<String> resolved = existing == null ? mintArchive(conn, itemId, entry)
+                    : Uni.createFrom().item(existing);
+                return resolved.flatMap(archiveId -> {
+                  kept.add(archiveId);
+                  return conn.preparedQuery(LINK_ARCHIVE).execute(Tuple.of(itemId, entry.path(), archiveId))
+                      .flatMap(linked -> storeScope(conn, archiveId, entry.archiveContents()))
+                      .map(inner -> running + inner);
+                });
+              });
             }
-            return chain;
+            // after the recursion, so a nested scope has already claimed its own
+            return chain.flatMap(total -> reapArchives(conn, itemId, kept).map(v -> total));
           });
         }));
   }
@@ -286,19 +408,23 @@ public class PgDataSystem implements DataSystem {
         .map(v -> id);
   }
 
-  /** Drop the archive items the previous description of this medium made. */
-  private Uni<Void> retireArchives(SqlConnection conn, String itemId) {
-    return conn.preparedQuery("SELECT id FROM items WHERE container_id=$1 AND data_archive = true")
-        .execute(Tuple.of(itemId)).flatMap(rows -> {
-          Uni<Void> chain = Uni.createFrom().voidItem();
-          for (Row row : rows) {
-            String childId = row.getString("id");
-            // recurse first: archives inside archives are items too
-            chain = chain.flatMap(v -> retireArchives(conn, childId)).flatMap(
-                v -> conn.preparedQuery("DELETE FROM items WHERE id=$1").execute(Tuple.of(childId)).replaceWithVoid());
-          }
-          return chain;
-        });
+  /**
+   * Drop the archive items this description did not claim — the ones whose archive is genuinely gone from the medium,
+   * as opposed to merely re-listed. Everything still present kept its item, and with it the scope holding every hash
+   * ever computed inside it.
+   */
+  private Uni<Void> reapArchives(SqlConnection conn, String itemId, Set<String> kept) {
+    return conn.preparedQuery(ORPHAN_ARCHIVES).execute(Tuple.of(itemId, kept.toArray(new String[0]))).flatMap(rows -> {
+      Uni<Void> chain = Uni.createFrom().voidItem();
+      // parents first — see ORPHAN_ARCHIVES; deleting a child out of order trips
+      // the archive_item_id foreign key still held by its parent's rows
+      for (Row row : rows) {
+        String orphan = row.getString("id");
+        chain = chain.flatMap(
+            v -> conn.preparedQuery("DELETE FROM items WHERE id=$1").execute(Tuple.of(orphan)).replaceWithVoid());
+      }
+      return chain;
+    });
   }
 
   @Override
@@ -403,10 +529,19 @@ public class PgDataSystem implements DataSystem {
   }
 
   @Override
-  public CompletionStage<List<DataLocation>> findMirrorsOf(String itemId) {
-    return this.pool
-        .withConnection(conn -> conn.preparedQuery(MIRRORS).execute(Tuple.of(itemId)).map(PgDataSystem::readLocations))
-        .subscribeAsCompletionStage();
+  public CompletionStage<List<MediumOverlap>> findOverlappingMedia(String itemId) {
+    return this.pool.withConnection(conn -> conn.preparedQuery(OVERLAP).execute(Tuple.of(itemId)).map(rows -> {
+      List<MediumOverlap> out = new ArrayList<>();
+      for (Row r : rows) {
+        long shared = r.getLong("shared_entries");
+        long ours = r.getLong("our_entries");
+        // "contains" is decided here rather than in SQL because it is a
+        // statement about OUR medium, and the row is about theirs
+        out.add(new MediumOverlap(r.getString("item_id"), r.getString("item_name"), shared, r.getLong("shared_bytes"),
+            r.getLong("their_entries"), ours, Boolean.TRUE.equals(r.getBoolean("identical")), shared == ours));
+      }
+      return List.copyOf(out);
+    })).subscribeAsCompletionStage();
   }
 
   // ---- dictionaries -----------------------------------------------------

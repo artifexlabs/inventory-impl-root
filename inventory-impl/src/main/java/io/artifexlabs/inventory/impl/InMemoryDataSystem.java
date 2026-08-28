@@ -33,6 +33,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 
 import io.artifexlabs.inventory.api.DataEntry;
+import io.artifexlabs.inventory.api.DataHashing;
 import io.artifexlabs.inventory.api.DataInfo;
 import io.artifexlabs.inventory.api.DataSystem;
 import io.artifexlabs.inventory.api.DataTree;
@@ -60,19 +61,43 @@ public class InMemoryDataSystem implements DataSystem {
 
   /** itemId -> (path -> entry). Ordered per medium so listings are stable. */
   private final ConcurrentHashMap<String, Map<String, DataEntry>> manifests;
+  /**
+   * itemId -> (archive's path in THAT scope -> the item id carrying its contents). The Postgres backend keeps this on
+   * {@code data_entries.archive_item_id}; here it is a map, because an archive's identity is its path and the item that
+   * path minted, and nothing else in the manifest records the second half.
+   */
+  private final ConcurrentHashMap<String, Map<String, String>> archiveIds;
+  /**
+   * itemId -> (path -> what went wrong). Lives HERE, not on the hashing twin, because that is where Postgres keeps it:
+   * {@code hash_state = 2} is a column on {@code data_entries}, so a manifest already knows which of its files could
+   * not be read. Putting it anywhere else would make the rollup unable to tell damage from work still to do.
+   */
+  private final ConcurrentHashMap<String, Map<String, Damage>> damage;
+  /**
+   * itemId -> (directory path -> its content rollup): the in-memory {@code data_dirs}. Written only by {@link #rollUp},
+   * exactly as the Postgres sweep writes those columns, so MERKLE and CONTENT matching becomes available at the same
+   * moment on both backends rather than one being quietly ahead.
+   */
+  private final ConcurrentHashMap<String, Map<String, DataTree.Rollup>> rollups;
   private final InventorySystem items;
   private final AuditSink auditSink;
   private final String principal;
 
   public InMemoryDataSystem(InventorySystem items, AuditSink auditSink, String principal) {
-    this(new ConcurrentHashMap<>(), items, auditSink, principal);
+    this(new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), new ConcurrentHashMap<>(), new ConcurrentHashMap<>(),
+        items, auditSink, principal);
   }
 
   /** View constructor: shares the store, differs only in attribution. */
-  private InMemoryDataSystem(ConcurrentHashMap<String, Map<String, DataEntry>> manifests, InventorySystem items,
-      AuditSink auditSink, String principal)
+  private InMemoryDataSystem(ConcurrentHashMap<String, Map<String, DataEntry>> manifests,
+      ConcurrentHashMap<String, Map<String, String>> archiveIds, ConcurrentHashMap<String, Map<String, Damage>> damage,
+      ConcurrentHashMap<String, Map<String, DataTree.Rollup>> rollups, InventorySystem items, AuditSink auditSink,
+      String principal)
   {
     this.manifests = manifests;
+    this.archiveIds = archiveIds;
+    this.damage = damage;
+    this.rollups = rollups;
     this.items = requireNonNull(items, "items");
     this.auditSink = requireNonNull(auditSink, "auditSink");
     this.principal = requireNonNull(principal, "principal");
@@ -80,7 +105,12 @@ public class InMemoryDataSystem implements DataSystem {
 
   @Override
   public InMemoryDataSystem actingAs(String principal) {
-    return new InMemoryDataSystem(this.manifests, this.items.actingAs(principal), this.auditSink, principal);
+    return new InMemoryDataSystem(this.manifests, this.archiveIds, this.damage, this.rollups,
+        this.items.actingAs(principal), this.auditSink, principal);
+  }
+
+  /** What a worker could not read, and how often it has tried. */
+  record Damage(String reason, int attempts, Instant firstSeen, Instant lastAttempt) {
   }
 
   @Override
@@ -89,7 +119,10 @@ public class InMemoryDataSystem implements DataSystem {
     return this.items.getItem(itemId).thenCompose(found -> {
       if (found.isEmpty() || !holdsData(found.get()))
         return CompletableFuture.completedStage(Optional.<Integer>empty());
-      return retireArchives(itemId).thenCompose(v -> store(itemId, submitted))
+      // no up-front retire: store() reuses the item at an archive path that came
+      // back and reaps only what this description dropped, so the hashes inside a
+      // re-listed archive survive exactly as the medium's own hashes do
+      return store(itemId, submitted)
           .thenCompose(count -> audit("data.replace", itemId,
               new JsonObject().put("entries", count).put("bytes", totalBytes(submitted)).put("archives",
                   (int) submitted.stream().filter(DataEntry::isArchive).count()))
@@ -112,15 +145,50 @@ public class InMemoryDataSystem implements DataSystem {
     for (DataEntry e : entries)
       scope.put(e.path(), carryHash(previous.get(e.path()), e));
     this.manifests.put(itemId, scope);
+    // The tree changed, so the content rollup describing it is now a statement
+    // about a manifest that no longer exists. Postgres gets this by rewriting
+    // data_dirs with structure only, leaving the merkle columns null.
+    this.rollups.remove(itemId);
+    // Damage is carried exactly as hashes are: a file still described the same
+    // way is still the same file, and its damage is still the repair target it
+    // was. Anything that changed or left the manifest loses its record, because
+    // the record was about bytes that are no longer being claimed to exist.
+    Map<String, Damage> hurt = this.damage.get(itemId);
+    if (hurt != null)
+      hurt.keySet().removeIf(path -> {
+        DataEntry old = previous.get(path);
+        DataEntry fresh = scope.get(path);
+        return fresh == null || old == null || old.sizeBytes() != fresh.sizeBytes()
+            || !java.util.Objects.equals(old.modified().orElse(null), fresh.modified().orElse(null));
+      });
 
+    // Reuse before mint. An archive still at the same path is the SAME archive,
+    // and its contents live in a scope keyed by its item id — so keeping that id
+    // is the whole of what keeps the hashes inside it across a re-describe.
+    Map<String, String> wasAt = this.archiveIds.getOrDefault(itemId, Map.of());
+    Map<String, String> nowAt = new java.util.LinkedHashMap<>();
     CompletionStage<Integer> counted = CompletableFuture.completedStage(entries.size());
     for (DataEntry entry : entries) {
       if (!entry.isArchive())
         continue;
-      counted = counted.thenCompose(running -> mintArchive(itemId, entry)
-          .thenCompose(archiveId -> store(archiveId, entry.archiveContents()).thenApply(inner -> running + inner)));
+      counted = counted.thenCompose(running -> {
+        String existing = wasAt.get(entry.path());
+        CompletionStage<String> resolved = existing == null ? mintArchive(itemId, entry)
+            : CompletableFuture.completedStage(existing);
+        return resolved.thenCompose(archiveId -> {
+          nowAt.put(entry.path(), archiveId);
+          return store(archiveId, entry.archiveContents()).thenApply(inner -> running + inner);
+        });
+      });
     }
-    return counted;
+    return counted.thenCompose(total -> {
+      this.archiveIds.put(itemId, nowAt);
+      CompletionStage<Void> reaped = CompletableFuture.completedStage(null);
+      for (Map.Entry<String, String> gone : wasAt.entrySet())
+        if (!nowAt.containsValue(gone.getValue()))
+          reaped = reaped.thenCompose(v -> retireArchive(gone.getValue()));
+      return reaped.thenApply(v -> total);
+    });
   }
 
   /** Give {@code fresh} the old digest when it truly describes the same file, otherwise leave it unhashed. */
@@ -135,6 +203,50 @@ public class InMemoryDataSystem implements DataSystem {
         : fresh;
   }
 
+  // ---- package-private hooks for InMemoryDataHashing --------------------
+  //
+  // The hashing twin needs to read a manifest and to attach a digest to one
+  // entry. Exposing that here rather than duplicating the store keeps ONE copy
+  // of the in-memory state: two structures claiming to hold the same manifest
+  // would drift, and the parity tests would then be comparing Postgres against
+  // whichever copy the test happened to touch.
+
+  /** This medium's entries, or empty. */
+  List<DataEntry> manifestOf(String itemId) {
+    return List.copyOf(this.manifests.getOrDefault(itemId, Map.of()).values());
+  }
+
+  /** One entry by path, or null. */
+  DataEntry entryAt(String itemId, String path) {
+    return this.manifests.getOrDefault(itemId, Map.of()).get(path);
+  }
+
+  /** What could not be read on this medium, by path. Empty is the common and happy case. */
+  Map<String, Damage> damageOn(String itemId) {
+    return this.damage.getOrDefault(itemId, Map.of());
+  }
+
+  /** Record damage, or another attempt at damage already known — one row per file, never one per attempt. */
+  void recordDamage(String itemId, String path, String reason) {
+    Map<String, Damage> hurt = this.damage.computeIfAbsent(itemId, k -> new java.util.concurrent.ConcurrentHashMap<>());
+    Instant now = Instant.now();
+    Damage before = hurt.get(path);
+    hurt.put(path, before == null ? new Damage(reason, 1, now, now)
+        : new Damage(reason, before.attempts() + 1, before.firstSeen(), now));
+  }
+
+  /** Attach a computed digest, leaving everything else about the entry alone. */
+  void applyHash(String itemId, String path, HashAlgorithm algorithm, String hash) {
+    Map<String, DataEntry> scope = this.manifests.get(itemId);
+    if (scope == null)
+      return;
+    DataEntry old = scope.get(path);
+    if (old == null)
+      return;
+    scope.put(path, new DataEntry(old.path(), old.sizeBytes(), algorithm, hash, old.mimeType(), old.modifiedAt(),
+        old.archiveContents()));
+  }
+
   /** An archive is a file AND a container: it earns an item of its own. */
   private CompletionStage<String> mintArchive(String containerId, DataEntry entry) {
     return this.items.createItem(entry.fileName(), entry.fileName(), "archive").thenCompose(created -> {
@@ -145,31 +257,19 @@ public class InMemoryDataSystem implements DataSystem {
     });
   }
 
-  /** Re-describing a medium drops the archive items the last description made. */
-  private CompletionStage<Void> retireArchives(String itemId) {
-    Map<String, DataEntry> previous = this.manifests.get(itemId);
-    if (previous == null || previous.isEmpty())
-      return CompletableFuture.completedStage(null);
-    List<String> archiveNames = previous.values().stream().filter(DataEntry::isArchive).map(DataEntry::fileName)
-        .toList();
-    if (archiveNames.isEmpty())
-      return CompletableFuture.completedStage(null);
-    return this.items.getItem(itemId).thenCompose(medium -> {
-      if (medium.isEmpty())
-        return CompletableFuture.<Void>completedStage(null);
-      CompletionStage<Void> chain = CompletableFuture.completedStage(null);
-      for (Item child : medium.get().getContainedItems().orElse(java.util.Set.of())) {
-        boolean wasArchive = child.getDataInfo().map(DataInfo::archive).orElse(false)
-            && archiveNames.contains(child.getName());
-        if (!wasArchive)
-          continue;
-        String childId = child.getId();
-        chain = chain.thenCompose(v -> retireArchives(childId))
-            .thenCompose(v -> this.items.deleteItem(childId).thenApply(ignored -> (Void) null));
-        this.manifests.remove(childId);
-      }
-      return chain;
-    });
+  /**
+   * Drop one archive item and everything nested inside it — used only for an archive the new description genuinely
+   * dropped. Matching is by ID, not by name: {@link #mintArchive} names an archive after its basename, so two
+   * {@code backup.zip} on one medium cannot be told apart that way.
+   */
+  private CompletionStage<Void> retireArchive(String archiveId) {
+    Map<String, String> nested = this.archiveIds.remove(archiveId);
+    this.manifests.remove(archiveId);
+    CompletionStage<Void> chain = CompletableFuture.completedStage(null);
+    if (nested != null)
+      for (String inner : nested.values())
+        chain = chain.thenCompose(v -> retireArchive(inner));
+    return chain.thenCompose(v -> this.items.deleteItem(archiveId).thenApply(ignored -> (Void) null));
   }
 
   @Override
@@ -198,6 +298,20 @@ public class InMemoryDataSystem implements DataSystem {
     if (touched == 0)
       return CompletableFuture.completedStage(0);
     this.manifests.put(itemId, rewritten);
+    // the archive index is keyed by path, so it moves with the rows. The
+    // Postgres backend gets this free — archive_item_id rides on the entry
+    // itself — and without it an archive that was merely RENAMED would be
+    // reaped and re-minted on the next re-describe, losing everything hashed
+    // inside it.
+    Map<String, String> archives = this.archiveIds.get(itemId);
+    if (archives != null) {
+      Map<String, String> movedArchives = new java.util.LinkedHashMap<>();
+      for (Map.Entry<String, String> a : archives.entrySet()) {
+        String moved = repath(a.getKey(), from, to);
+        movedArchives.put(moved == null ? a.getKey() : moved, a.getValue());
+      }
+      this.archiveIds.put(itemId, movedArchives);
+    }
     final int count = touched;
     return audit("data.rename", itemId, new JsonObject().put("from", from).put("to", to).put("entries", count))
         .thenApply(v -> count);
@@ -257,16 +371,26 @@ public class InMemoryDataSystem implements DataSystem {
     for (Map.Entry<String, Map<String, DataEntry>> medium : this.manifests.entrySet()) {
       String itemId = medium.getKey();
       List<DataEntry> entries = List.copyOf(medium.getValue().values());
+      Map<String, DataTree.Rollup> rolled = this.rollups.getOrDefault(itemId, Map.of());
       for (DataTree.Node node : DataTree.build(HashAlgorithm.SHA256, entries)) {
         if (node.subtreeFiles() < q.minFiles() || node.subtreeBytes() < q.minBytes() || node.depth() < q.minDepth())
           continue;
-        byte[] ident = identityOf(q, node);
+        byte[] ident = identityOf(q, node, rolled.get(node.path()));
         if (ident == null)
           continue; // MERKLE and CONTENT do not exist until the files are hashed
+        // The grouping key carries the DAMAGE for the content flavours. An
+        // unreadable file contributes nothing to a merkle, so a damaged folder
+        // and an intact one holding only its readable half hash the same — and
+        // calling those two copies of each other would be a lie with a digest
+        // attached. STRUCTURE is read off the manifest and never sees damage at
+        // all, so it groups on identity alone.
+        byte[] hurt = q.match() == Match.STRUCTURE || rolled.get(node.path()) == null ? null
+            : rolled.get(node.path()).unreadableHash();
         String hex = HexFormat.of().formatHex(ident);
-        places.computeIfAbsent(hex, k -> new ArrayList<>())
+        String key = hurt == null ? hex : hex + ":" + HexFormat.of().formatHex(hurt);
+        places.computeIfAbsent(key, k -> new ArrayList<>())
             .add(new SectionLocation(itemId, nameOf(itemId), node.path(), node.depth()));
-        sizes.computeIfAbsent(hex, k -> new long[] {
+        sizes.computeIfAbsent(key, k -> new long[] {
             node.subtreeFiles(), node.subtreeBytes()
         });
       }
@@ -285,7 +409,8 @@ public class InMemoryDataSystem implements DataSystem {
       if (!keep || (q.itemId() != null && at.stream().noneMatch(l -> l.itemId().equals(q.itemId()))))
         continue;
       long[] sz = sizes.get(e.getKey());
-      out.add(new SectionMatch(e.getKey(), sz[0], sz[1], List.copyOf(at)));
+      // the reported identity is the subtree's, not the composite grouping key
+      out.add(new SectionMatch(e.getKey().split(":")[0], sz[0], sz[1], List.copyOf(at)));
     }
     // biggest first, same order the Pg query produces
     out.sort(Comparator.comparingLong(SectionMatch::subtreeBytes).reversed()
@@ -296,9 +421,13 @@ public class InMemoryDataSystem implements DataSystem {
     return CompletableFuture.completedStage(List.copyOf(out.subList(from, to)));
   }
 
-  /** STRUCTURE is available at once; the other two stay null until the hasher has run. */
-  private static byte[] identityOf(SectionQuery q, DataTree.Node node) {
-    return q.match() == Match.STRUCTURE ? node.structureHash() : null;
+  /** STRUCTURE is available at once; the other two stay null until the hasher has run AND the rollup has swept. */
+  private static byte[] identityOf(SectionQuery q, DataTree.Node node, DataTree.Rollup rolled) {
+    return switch (q.match()) {
+    case STRUCTURE -> node.structureHash();
+    case MERKLE -> rolled == null ? null : rolled.merkleHash();
+    case CONTENT -> rolled == null ? null : rolled.merkleContentHash();
+    };
   }
 
   private String nameOf(String itemId) {
@@ -311,25 +440,92 @@ public class InMemoryDataSystem implements DataSystem {
   }
 
   @Override
-  public CompletionStage<List<DataLocation>> findMirrorsOf(String itemId) {
+  public CompletionStage<List<MediumOverlap>> findOverlappingMedia(String itemId) {
     Map<String, DataEntry> mine = this.manifests.getOrDefault(itemId, Map.of());
-    if (mine.isEmpty())
+    long ours = mine.values().stream().filter(e -> e.hash() != null).count();
+    if (ours == 0)
       return CompletableFuture.completedStage(List.of());
-    List<Map.Entry<String, DataEntry>> hits = new ArrayList<>();
+    byte[] ourRoot = rootMerkle(itemId);
+    List<MediumOverlap> out = new ArrayList<>();
     for (Map.Entry<String, Map<String, DataEntry>> medium : this.manifests.entrySet()) {
       if (medium.getKey().equals(itemId))
         continue;
+      long shared = 0, sharedBytes = 0, theirs = 0;
       for (DataEntry entry : medium.getValue().values()) {
+        if (entry.hash() == null)
+          continue;
+        theirs++;
         DataEntry same = mine.get(entry.path());
-        // same place AND same content: the pair the Pg backend indexes. Two
-        // UNHASHED entries at the same path are not a mirror — same location is
-        // not evidence of same content, which is the whole point of the hash.
-        if (same != null && same.hash() != null && entry.hash() != null && same.hashAlgorithm() == entry.hashAlgorithm()
-            && same.hash().equals(entry.hash()))
-          hits.add(Map.entry(medium.getKey(), entry));
+        // same place AND same content — the rule findMirrorsOf had, which did
+        // not stop being useful, it stopped being the only one. Two UNHASHED
+        // entries at one path are not evidence of anything: same location says
+        // nothing about content, which is the whole point of the digest.
+        if (same != null && same.hash() != null && same.hashAlgorithm() == entry.hashAlgorithm()
+            && same.hash().equals(entry.hash())) {
+          shared++;
+          sharedBytes += entry.sizeBytes();
+        }
       }
+      if (shared == 0)
+        continue;
+      byte[] theirRoot = rootMerkle(medium.getKey());
+      boolean identical = ourRoot != null && theirRoot != null && java.util.Arrays.equals(ourRoot, theirRoot);
+      out.add(new MediumOverlap(medium.getKey(), nameOf(medium.getKey()), shared, sharedBytes, theirs, ours, identical,
+          shared == ours));
     }
-    return locate(hits);
+    out.sort(Comparator.comparingLong(MediumOverlap::sharedBytes).reversed()
+        .thenComparing(Comparator.comparingLong(MediumOverlap::sharedEntries).reversed())
+        .thenComparing(MediumOverlap::itemName));
+    return CompletableFuture.completedStage(List.copyOf(out));
+  }
+
+  /** A medium's whole-tree content identity, or null until it has been hashed and swept. */
+  private byte[] rootMerkle(String itemId) {
+    DataTree.Rollup root = this.rollups.getOrDefault(itemId, Map.of()).get("");
+    return root == null ? null : root.merkleHash();
+  }
+
+  // ---- the rollup sweep and the repair index ----------------------------
+
+  /** Recompute this medium's directory rollup from the manifest as it stands. See {@code DataHashing.rollUp}. */
+  int rollUp(String itemId) {
+    List<DataEntry> entries = manifestOf(itemId);
+    if (entries.isEmpty()) {
+      this.rollups.remove(itemId);
+      return 0;
+    }
+    Map<String, DataTree.Rollup> rolled = new LinkedHashMap<>();
+    for (DataTree.Rollup r : DataTree.roll(HashAlgorithm.SHA256, entries, damageOn(itemId).keySet()))
+      rolled.put(r.path(), r);
+    this.rollups.put(itemId, rolled);
+    return rolled.size();
+  }
+
+  /** For every file this medium could not read, the sibling media that hold that path intact. */
+  CompletionStage<List<DataHashing.Repair>> findRepairs(String itemId) {
+    Map<String, Damage> hurt = damageOn(itemId);
+    if (hurt.isEmpty())
+      return CompletableFuture.completedStage(List.of());
+    List<String> paths = hurt.keySet().stream().sorted().toList();
+    CompletionStage<List<DataHashing.Repair>> chain = CompletableFuture.completedStage(new ArrayList<>());
+    for (String path : paths) {
+      Damage d = hurt.get(path);
+      // matched by PATH, because an unreadable file has no content digest —
+      // that is what unreadable MEANS, and the path is the only handle left
+      List<Map.Entry<String, DataEntry>> elsewhere = new ArrayList<>();
+      for (Map.Entry<String, Map<String, DataEntry>> medium : this.manifests.entrySet()) {
+        if (medium.getKey().equals(itemId))
+          continue;
+        DataEntry candidate = medium.getValue().get(path);
+        if (candidate != null && candidate.hash() != null)
+          elsewhere.add(Map.entry(medium.getKey(), candidate));
+      }
+      chain = chain.thenCompose(acc -> locate(elsewhere).thenApply(where -> {
+        acc.add(new DataHashing.Repair(path, d.reason(), d.attempts(), where));
+        return acc;
+      }));
+    }
+    return chain.thenApply(List::copyOf);
   }
 
   /** Attach the medium's name to each hit, so a result reads as a place. */

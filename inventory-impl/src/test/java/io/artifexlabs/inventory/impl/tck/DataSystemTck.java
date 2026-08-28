@@ -139,26 +139,55 @@ public abstract class DataSystemTck {
     assertFalse(await(system().findByHash(HashAlgorithm.SHA256, HASH_A)).isEmpty());
   }
 
+  /**
+   * Overlap is still same content at the same PATH, and that is deliberate.
+   *
+   * <p>
+   * The rule did not stop being useful when {@code findDuplicateSections} arrived; it stopped being the only rule. "Is
+   * this disc a faithful copy of that one" wants location to matter — a file that moved is not in the same place —
+   * while section matching exists precisely to ignore it. Both rules are asserted, next to each other, so a later
+   * reader cannot "fix" one of them into the other.
+   */
   @Test
-  public void mirrorsAreSameContentAtSamePath() throws Exception {
+  public void overlapIsSameContentAtTheSamePathWhileSectionsIgnoreLocation() throws Exception {
     String original = medium("backup-01");
     String copy = medium("backup-01-copy");
     String elsewhere = medium("junk-drawer");
 
     await(system().replaceManifest(original, List.of(file("docs/a.txt", HASH_A), file("docs/b.txt", HASH_B))));
     await(system().replaceManifest(copy, List.of(file("docs/a.txt", HASH_A), file("docs/b.txt", HASH_B))));
-    // same bytes, different place: not a mirror of anything
-    await(system().replaceManifest(elsewhere, List.of(file("random/a.txt", HASH_A))));
+    // the same two files, as a folder, somewhere else entirely
+    await(system().replaceManifest(elsewhere, List.of(file("random/a.txt", HASH_A), file("random/b.txt", HASH_B))));
 
-    List<DataSystem.DataLocation> mirrors = await(system().findMirrorsOf(original));
+    List<DataSystem.MediumOverlap> overlap = await(system().findOverlappingMedia(original));
 
-    assertEquals(List.of("backup-01-copy", "backup-01-copy"),
-        mirrors.stream().map(DataSystem.DataLocation::itemName).toList());
-    assertTrue(mirrors.stream().noneMatch(m -> m.itemId().equals(elsewhere)),
-        "same content at a different path is not a mirror");
+    DataSystem.MediumOverlap best = overlap.get(0);
+    assertEquals("backup-01-copy", best.itemName());
+    assertEquals(2, best.sharedEntries(), "both files, at the same paths, with the same digests");
+    assertEquals(200L, best.sharedBytes());
+    assertTrue(best.contains(), "everything we hold is on theirs, so theirs is a superset");
+    assertTrue(overlap.stream().noneMatch(o -> o.itemId().equals(elsewhere)),
+        "same content at a DIFFERENT path is not overlap — which is exactly what sections is for");
+
+    // and the other rule, on the same three media
+    List<DataSystem.SectionMatch> sections = await(system().findDuplicateSections(
+        new DataSystem.SectionQuery(null, DataSystem.Match.STRUCTURE, DataSystem.Scope.BOTH, 1, 0L, 0, 0, 50)));
+    assertTrue(sections.stream().anyMatch(m -> m.locations().stream().anyMatch(l -> l.itemId().equals(elsewhere))),
+        "the relocated copy IS found by section matching, because location is what that question ignores");
   }
 
-  // ---- duplicated sections (DATA_MERKLE.md stage 1) ----------------------
+  @Test
+  public void aMediumNobodyHasHashedOverlapsNothing() throws Exception {
+    String one = medium("unhashed-one");
+    String two = medium("unhashed-two");
+    await(system().replaceManifest(one, List.of(sized("docs/a.txt", 100L))));
+    await(system().replaceManifest(two, List.of(sized("docs/a.txt", 100L))));
+
+    assertTrue(await(system().findOverlappingMedia(one)).isEmpty(),
+        "same path is not evidence of same content — that is what the digest is for, and there isn't one yet");
+  }
+
+  // ---- duplicated sections (PLAN.md Phase 23 stage 1) ----------------------
   //
   // The question findMirrorsOf structurally could not answer. It compares files
   // at the SAME path, so a folder copied elsewhere is invisible to it; here a
@@ -341,6 +370,99 @@ public abstract class DataSystemTck {
         await(system().entriesOf(archive.getId(), null, 0, 50)).stream().map(DataEntry::path).toList());
     // a file inside an archive is findable like any other file
     assertEquals(1, await(system().findByHash(HashAlgorithm.SHA256, HASH_B)).size());
+  }
+
+  /** Every archive item this one contains. */
+  private List<Item> archiveChildren(String itemId) throws Exception {
+    return await(this.items.getItem(itemId)).orElseThrow().getContainedItems().orElse(java.util.Set.of()).stream()
+        .filter(i -> i.getDataInfo().map(DataInfo::archive).orElse(false)).toList();
+  }
+
+  /** An archive at {@code path} whose single member is {@code member}. */
+  private static DataEntry archive(String path, long bytes, DataEntry member) {
+    return new DataEntry(path, bytes, null, null, "application/zip", null, List.of(member));
+  }
+
+  @Test
+  public void reDescribingAMediumKeepsTheHashesInsideAnArchive() throws Exception {
+    String disc = medium("backup-01");
+    await(system().replaceManifest(disc, List.of(archive("backups/2019.zip", 4096L, file("notes.txt", HASH_B)))));
+    String before = archiveChildren(disc).get(0).getId();
+
+    // re-scanned by find, which knows every size and nothing about any content
+    await(system().replaceManifest(disc, List.of(archive("backups/2019.zip", 4096L, sized("notes.txt", 100L)))));
+
+    String after = archiveChildren(disc).get(0).getId();
+    assertEquals(before, after,
+        "an archive still at the same path is the same archive; a fresh item id strands every hash under it");
+    assertEquals(HASH_B, await(system().entriesOf(after, null, 0, 50)).get(0).hash(),
+        "weeks of hashing inside an archive must survive a re-describe exactly as the medium's own hashes do");
+  }
+
+  @Test
+  public void twoArchivesSharingABasenameDoNotCrossTheirContents() throws Exception {
+    String disc = medium("backup-01");
+    // identity is the PATH, and mintArchive names an item after the basename
+    // alone — so these two are indistinguishable by name and containment
+    await(system().replaceManifest(disc, List.of(archive("alpha/backup.zip", 4096L, file("a.txt", HASH_A)),
+        archive("beta/backup.zip", 8192L, file("b.txt", HASH_B)))));
+
+    await(system().replaceManifest(disc, List.of(archive("alpha/backup.zip", 4096L, sized("a.txt", 100L)),
+        archive("beta/backup.zip", 8192L, sized("b.txt", 100L)))));
+
+    java.util.Map<String, String> hashByMember = new java.util.LinkedHashMap<>();
+    for (Item child : archiveChildren(disc)) {
+      DataEntry inside = await(system().entriesOf(child.getId(), null, 0, 50)).get(0);
+      hashByMember.put(inside.path(), inside.hash());
+    }
+    assertEquals(java.util.Map.of("a.txt", HASH_A, "b.txt", HASH_B), hashByMember,
+        "each backup.zip keeps its own contents; matching by name would swap them");
+  }
+
+  @Test
+  public void renamingAnArchivesPathKeepsWhatWasHashedInsideIt() throws Exception {
+    String disc = medium("backup-01");
+    await(system().replaceManifest(disc, List.of(archive("backups/2019.zip", 4096L, file("notes.txt", HASH_B)))));
+    String before = archiveChildren(disc).get(0).getId();
+
+    assertEquals(1, await(system().renamePath(disc, "backups/2019.zip", "archive/2019.zip")));
+    // the next scan describes it at its corrected path, hashing nothing
+    await(system().replaceManifest(disc, List.of(archive("archive/2019.zip", 4096L, sized("notes.txt", 100L)))));
+
+    assertEquals(before, archiveChildren(disc).get(0).getId(),
+        "a rename corrects a path; it does not make the archive a different archive");
+    assertEquals(HASH_B, await(system().entriesOf(before, null, 0, 50)).get(0).hash());
+  }
+
+  @Test
+  public void anArchiveTheMediumNoLongerHoldsIsReaped() throws Exception {
+    String disc = medium("backup-01");
+    await(system().replaceManifest(disc,
+        List.of(archive("backups/2019.zip", 4096L, file("notes.txt", HASH_B)), file("a.txt", HASH_A))));
+    assertEquals(1, archiveChildren(disc).size());
+
+    // the zip was deleted off the disc between scans
+    await(system().replaceManifest(disc, List.of(file("a.txt", HASH_A))));
+
+    assertTrue(archiveChildren(disc).isEmpty(),
+        "reuse must not become never-clean-up: an archive that is genuinely gone takes its item with it");
+    assertTrue(await(system().findByHash(HashAlgorithm.SHA256, HASH_B)).isEmpty(),
+        "and its contents stop being findable, because they are no longer on any medium");
+  }
+
+  @Test
+  public void aNestedArchiveIsReapedWithItsContainer() throws Exception {
+    String disc = medium("backup-01");
+    DataEntry inner = archive("inner.zip", 512L, file("deep.txt", HASH_B));
+    await(system().replaceManifest(disc, List.of(archive("outer.zip", 4096L, inner))));
+    assertEquals(1, archiveChildren(archiveChildren(disc).get(0).getId()).size(),
+        "archives nest, and so do their items");
+
+    await(system().replaceManifest(disc, List.of(file("a.txt", HASH_A))));
+
+    assertTrue(archiveChildren(disc).isEmpty());
+    assertTrue(await(system().findByHash(HashAlgorithm.SHA256, HASH_B)).isEmpty(),
+        "the nested archive goes too, and only in that order: its container's rows are what referenced it");
   }
 
   @Test

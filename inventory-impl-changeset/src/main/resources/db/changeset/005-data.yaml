@@ -107,16 +107,30 @@ databaseChangeLog:
               - column:
                   name: hashed_at
                   type: timestamptz
-              # 0 pending, 1 done, 2 unreadable. Unreadable is NOT a failure to
-              # retry forever: it is recorded in data_unreadable and becomes a
-              # repair target, because a file this medium cannot read may be
-              # readable on a sibling copy.
+              # 0 pending, 1 done, 2 unreadable, 3 CLAIMED. Unreadable is NOT a
+              # failure to retry forever: it is recorded in data_unreadable and
+              # becomes a repair target, because a file this medium cannot read
+              # may be readable on a sibling copy.
+              #
+              # CLAIMED exists because hashing one file can take minutes and the
+              # transaction that hands it out must NOT stay open that long. A
+              # claim is committed, the worker hashes outside any transaction,
+              # then completes. A worker that dies leaves rows claimed, which is
+              # why claimed_at is here: a claim older than the lease is simply
+              # reclaimed. Interruption is the normal case over a weeks-long run,
+              # not the exception.
               - column:
                   name: hash_state
                   type: smallint
                   defaultValueNumeric: 0
                   constraints:
                     nullable: false
+              - column:
+                  name: claimed_at
+                  type: timestamptz
+              - column:
+                  name: claimed_by
+                  type: text
               # An archive is a file AND a container. mintArchive names the item
               # after the BASENAME, so two backup.zip at different paths on one
               # medium are indistinguishable by name+containment — fine while
@@ -173,6 +187,21 @@ databaseChangeLog:
                   name: item_id
               - column:
                   name: path_text
+        # The hasher's only question: what on this medium is still pending?
+        # Partial so it indexes ONLY the shrinking work queue rather than every
+        # row of a finished medium — on a fully hashed 50M-file disc this index
+        # is empty.
+        - sql:
+            sql: >-
+              CREATE INDEX idx_data_entries_pending ON data_entries (item_id, path_text)
+              WHERE hash_state = 0
+            rollbackSql: DROP INDEX IF EXISTS idx_data_entries_pending
+        - sql:
+            sql: >-
+              CREATE INDEX idx_data_entries_claimed ON data_entries (claimed_at)
+              WHERE hash_state = 3
+            rollbackSql: DROP INDEX IF EXISTS idx_data_entries_claimed
+
         # Substring search over a listing is a LEADING-wildcard LIKE, which no
         # btree can serve: measured at 745 ms on 5.5M rows (Parallel Seq Scan),
         # held to ~40 ms by this index. Costs ~217 bytes/row.

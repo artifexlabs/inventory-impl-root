@@ -78,7 +78,7 @@ public class StorageVerticle extends AbstractVerticle {
     AssetsStorage.register(this::on, services.assets());
     RegionsStorage.register(this::on, services.regions());
     AuditStorage.register(this::on, services.auditReader());
-    DataStorage.register(this::on, services.data());
+    DataStorage.register(this::on, services.data(), services.hashing());
     UsersStorage.register(this::on, services.users(), services.auditSink());
     TokensStorage.register(this::on, services.tokens(), services.auditSink());
     AuthStorage.register(this::on, services.users(), services.tokens(), services.auditSink(), provision);

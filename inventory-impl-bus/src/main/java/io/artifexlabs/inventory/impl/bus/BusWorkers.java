@@ -44,7 +44,8 @@ public final class BusWorkers {
   /** Everything the workers act through, bundled for deployment. */
   public record BackendServices(InventorySystem inventory, AssetStore assets, RegionSystem regions,
       AuditReader auditReader, AuditSink auditSink, LabelPrinter printer, UserStore users, TokenService tokens,
-      io.artifexlabs.inventory.api.UpcCatalog catalog, io.artifexlabs.inventory.api.DataSystem data) {
+      io.artifexlabs.inventory.api.UpcCatalog catalog, io.artifexlabs.inventory.api.DataSystem data,
+      io.artifexlabs.inventory.api.DataHashing hashing) {
   }
 
   private BusWorkers() {

@@ -28,6 +28,7 @@ public class DataVerticle extends ServiceVerticle {
   public DataVerticle(BusGuard guard) {
     super(BusActions.addressOf(BusActions.DATA_ENTRIES), guard);
     forward(BusActions.DATA_REPLACE_MANIFEST, BusActions.DATA_RENAME_PATH, BusActions.DATA_ENTRIES,
-        BusActions.DATA_SUMMARY, BusActions.DATA_BY_HASH, BusActions.DATA_MIRRORS);
+        BusActions.DATA_SUMMARY, BusActions.DATA_BY_HASH, BusActions.DATA_OVERLAP, BusActions.DATA_PROGRESS,
+        BusActions.DATA_SECTIONS, BusActions.DATA_ROLLUP, BusActions.DATA_REPAIRS);
   }
 }

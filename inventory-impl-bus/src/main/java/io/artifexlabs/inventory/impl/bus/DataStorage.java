@@ -20,6 +20,7 @@ package io.artifexlabs.inventory.impl.bus;
 import java.util.List;
 
 import io.artifexlabs.inventory.api.DataEntry;
+import io.artifexlabs.inventory.api.DataHashing;
 import io.artifexlabs.inventory.api.DataSystem;
 import io.artifexlabs.inventory.api.HashAlgorithm;
 import io.artifexlabs.inventory.api.bus.BusActions;
@@ -39,7 +40,7 @@ final class DataStorage {
   private DataStorage() {
   }
 
-  static void register(StorageVerticle.Registrar reg, DataSystem data) {
+  static void register(StorageVerticle.Registrar reg, DataSystem data, DataHashing hashing) {
     reg.on(BusActions.DATA_REPLACE_MANIFEST, env -> {
       String itemId = Envelopes.requireTarget(env);
       JsonArray raw = env.data().getJsonArray("entries", new JsonArray());
@@ -90,11 +91,79 @@ final class DataStorage {
       return data.findByHash(algorithm, hash).thenApply(DataStorage::locations);
     });
 
-    reg.on(BusActions.DATA_MIRRORS,
-        env -> data.findMirrorsOf(Envelopes.requireTarget(env)).thenApply(DataStorage::locations));
+    reg.on(BusActions.DATA_OVERLAP,
+        env -> data.findOverlappingMedia(Envelopes.requireTarget(env))
+            .thenApply(found -> (Object) new JsonArray(found.stream()
+                .map(o -> new JsonObject().put("itemId", o.itemId()).put("itemName", o.itemName())
+                    .put("sharedEntries", o.sharedEntries()).put("sharedBytes", o.sharedBytes())
+                    .put("theirEntries", o.theirEntries()).put("ourEntries", o.ourEntries())
+                    .put("identical", o.identical()).put("contains", o.contains()))
+                .toList())));
+
+    // A write, and named as one: it rewrites every directory row the medium
+    // owns. Idempotent, so running it twice costs time and changes nothing.
+    reg.on(BusActions.DATA_ROLLUP, env -> hashing.actingAs(env.principal()).rollUp(Envelopes.requireTarget(env))
+        .thenApply(n -> (Object) new JsonObject().put("directories", n)));
+
+    reg.on(BusActions.DATA_REPAIRS,
+        env -> hashing.findRepairs(Envelopes.requireTarget(env))
+            .thenApply(found -> (Object) new JsonArray(found.stream()
+                .map(r -> new JsonObject().put("path", r.path()).put("reason", r.reason()).put("attempts", r.attempts())
+                    .put("recoverable", !r.availableOn().isEmpty()).put("availableOn", locations(r.availableOn())))
+                .toList())));
+
+    // The progress bar for a job measured in weeks. Read-only and cheap: the
+    // counts come off the manifest itself, which is why the operator can poll
+    // it without competing with the worker for the medium.
+    reg.on(BusActions.DATA_PROGRESS, env -> hashing.progressOf(Envelopes.requireTarget(env)).thenApply(p -> {
+      JsonObject reply = new JsonObject().put("pending", p.pending()).put("claimed", p.claimed()).put("done", p.done())
+          .put("unreadable", p.unreadable()).put("pendingBytes", p.pendingBytes()).put("fraction", p.fraction())
+          .put("complete", p.complete());
+      // said out loud rather than left for the caller to derive: a medium can be
+      // finished and NOT intact, and conflating the two hides damage
+      return (Object) reply.put("intact", p.complete() && p.unreadable() == 0);
+    }));
+
+    // The only data action whose target is OPTIONAL: with one, "where else does
+    // this medium's content live"; without one, the whole inventory's duplication.
+    reg.on(BusActions.DATA_SECTIONS, env -> {
+      JsonObject d = env.data();
+      DataSystem.SectionQuery sane = DataSystem.SectionQuery.sane(env.targetId().orElse(null),
+          enumOf(DataSystem.Match.class, d.getString("match"), DataSystem.Match.STRUCTURE));
+      DataSystem.SectionQuery q = new DataSystem.SectionQuery(sane.itemId(), sane.match(),
+          enumOf(DataSystem.Scope.class, d.getString("scope"), sane.scope()), d.getInteger("minFiles", sane.minFiles()),
+          d.getLong("minBytes", sane.minBytes()), d.getInteger("minDepth", sane.minDepth()),
+          d.getInteger("page", sane.page()), d.getInteger("size", sane.size()));
+      return data.findDuplicateSections(q).thenApply(DataStorage::sections);
+    });
   }
 
-  private static Object locations(List<DataSystem.DataLocation> found) {
+  /** Case-insensitive enum lookup that refuses an unknown name rather than silently defaulting. */
+  private static <E extends Enum<E>> E enumOf(Class<E> type, String name, E fallback) {
+    if (name == null || name.isBlank())
+      return fallback;
+    for (E value : type.getEnumConstants())
+      if (value.name().equalsIgnoreCase(name.trim()))
+        return value;
+    throw BusServiceException.badRequest("unknown " + type.getSimpleName().toLowerCase(java.util.Locale.ROOT) + ": "
+        + name + " (expected one of " + java.util.Arrays.toString(type.getEnumConstants()) + ")");
+  }
+
+  /**
+   * Grouped by identity, not flattened. "This folder appears three times" is the answer; the list of places is the
+   * evidence, and flattening it would make the caller re-group to read it.
+   */
+  private static Object sections(List<DataSystem.SectionMatch> found) {
+    return new JsonArray(
+        found.stream()
+            .map(m -> new JsonObject().put("hash", m.hash()).put("subtreeFiles", m.subtreeFiles())
+                .put("subtreeBytes", m.subtreeBytes()).put("places", m.locations().size()).put("locations",
+                    new JsonArray(m.locations().stream().map(l -> new JsonObject().put("itemId", l.itemId())
+                        .put("itemName", l.itemName()).put("path", l.path()).put("depth", l.depth())).toList())))
+            .toList());
+  }
+
+  private static JsonArray locations(List<DataSystem.DataLocation> found) {
     return new JsonArray(found.stream().map(l -> new JsonObject().put("itemId", l.itemId())
         .put("itemName", l.itemName()).put("path", l.path()).put("sizeBytes", l.sizeBytes())).toList());
   }
