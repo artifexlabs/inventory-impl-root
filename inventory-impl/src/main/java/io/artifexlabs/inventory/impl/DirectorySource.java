@@ -62,7 +62,9 @@ public class DirectorySource implements ContentSource {
         throw new IOException("symbolic link: its target's bytes belong to whichever medium actually holds them");
       if (!a.isRegularFile())
         throw new IOException("not a regular file: " + (a.isDirectory() ? "directory" : "device, socket or fifo"));
-      return new Stat(a.size(), a.lastModifiedTime().toInstant());
+      // micros, the same normalization DataEntry applies: this Stat exists to be
+      // EQUALITY-compared against a manifest that round-tripped timestamptz
+      return new Stat(a.size(), a.lastModifiedTime().toInstant().truncatedTo(java.time.temporal.ChronoUnit.MICROS));
     } catch (NoSuchFileException gone) {
       return null;
     }

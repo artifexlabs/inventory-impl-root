@@ -67,6 +67,8 @@ SAFETY
 from __future__ import annotations
 
 import argparse
+import gzip
+import tarfile
 import hashlib
 import os
 import random
@@ -183,6 +185,52 @@ class Harvest:
                 f"  depth spread    " + ", ".join(f"{d}:{n:,}" for d, n in depths[:12]))
 
 
+def iter_path_lines(paths_file: str):
+    """Yield one PATH per line from plain text, .gz, or .tgz/.tar.gz input.
+
+    A tarball is read as a STREAM (mode r|gz) so a multi-GB listing is never
+    extracted to disk; every regular member is concatenated in archive order.
+    The first non-empty line decides the whole file's shape once: a
+    find -printf manifest (size\tmtime\tpath) contributes its LAST tab
+    field, a bare listing contributes the whole line. Sniffing per FILE
+    rather than per line means a rare tab inside a filename cannot silently
+    truncate paths in a bare listing.
+    """
+    lower = paths_file.lower()
+
+    def decoded(binary_fh):
+        for raw in binary_fh:
+            yield raw.decode("utf-8", errors="replace")
+
+    def sources():
+        if lower.endswith((".tgz", ".tar.gz")):
+            with tarfile.open(paths_file, mode="r|gz") as tar:
+                for member in tar:
+                    if not member.isreg():
+                        continue
+                    fh = tar.extractfile(member)
+                    if fh is not None:
+                        yield decoded(fh)
+        elif lower.endswith(".gz"):
+            with gzip.open(paths_file, "rb") as fh:
+                yield decoded(fh)
+        else:
+            with open(paths_file, "r", errors="replace") as fh:
+                yield fh
+
+    shape = None  # "bare" | "tsv"
+    for lines in sources():
+        for line in lines:
+            line = line.rstrip("\r\n")
+            if not line.strip():
+                continue
+            if shape is None:
+                head = line.split("\t", 1)[0]
+                shape = "tsv" if "\t" in line and (head.isdigit() or head == "") else "bare"
+                print(f"    input shape: {shape} ({paths_file})", flush=True)
+            yield line.split("\t")[-1].strip() if shape == "tsv" else line.strip()
+
+
 def harvest(walk: str | None, paths_file: str | None, want: int, rng: random.Random) -> Harvest:
     """Reservoir-sample `want` paths from a stream of unbounded size.
 
@@ -213,13 +261,10 @@ def harvest(walk: str | None, paths_file: str | None, want: int, rng: random.Ran
                 res[j] = rel
 
     if paths_file:
-        with open(paths_file, "r", errors="replace") as fh:
-            for n, line in enumerate(fh, 1):
-                line = line.strip()
-                if line:
-                    offer(line)
-                if n % 2_000_000 == 0:
-                    print(f"    ...read {n:,} lines", flush=True)
+        for n, line in enumerate(iter_path_lines(paths_file), 1):
+            offer(line)
+            if n % 2_000_000 == 0:
+                print(f"    ...read {n:,} lines", flush=True)
     else:
         root = os.path.abspath(walk or ".")
         for dirpath, dirnames, filenames in os.walk(root, onerror=lambda e: None):

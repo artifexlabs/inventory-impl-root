@@ -1,0 +1,322 @@
+================================================================================================
+  PATH-LAYOUT MEASUREMENT — deciding 005-data.yaml's final index shape
+================================================================================================
+
+  HARVEST
+    input shape: bare (paths-002.tgz)
+    ...read 2,000,000 lines
+    ...read 4,000,000 lines
+    ...read 6,000,000 lines
+    ...read 8,000,000 lines
+    ...read 10,000,000 lines
+    ...read 12,000,000 lines
+    ...read 14,000,000 lines
+    ...read 16,000,000 lines
+    ...read 18,000,000 lines
+    ...read 20,000,000 lines
+    ...read 22,000,000 lines
+    ...read 24,000,000 lines
+    ...read 26,000,000 lines
+    ...read 28,000,000 lines
+    ...read 30,000,000 lines
+    ...read 32,000,000 lines
+    ...read 34,000,000 lines
+    ...read 36,000,000 lines
+    ...read 38,000,000 lines
+    ...read 40,000,000 lines
+    ...read 42,000,000 lines
+    ...read 44,000,000 lines
+    ...read 46,000,000 lines
+    ...read 48,000,000 lines
+    ...read 50,000,000 lines
+    ...read 52,000,000 lines
+    ...read 54,000,000 lines
+    ...read 56,000,000 lines
+    ...read 58,000,000 lines
+    ...read 60,000,000 lines
+    ...read 62,000,000 lines
+    ...read 64,000,000 lines
+    ...read 66,000,000 lines
+    ...read 68,000,000 lines
+    ...read 70,000,000 lines
+    ...read 72,000,000 lines
+    ...read 74,000,000 lines
+    ...read 76,000,000 lines
+    ...read 78,000,000 lines
+    ...read 80,000,000 lines
+    ...read 82,000,000 lines
+    ...read 84,000,000 lines
+    ...read 86,000,000 lines
+    ...read 88,000,000 lines
+    ...read 90,000,000 lines
+    ...read 92,000,000 lines
+    ...read 94,000,000 lines
+    ...read 96,000,000 lines
+    ...read 98,000,000 lines
+    ...read 100,000,000 lines
+    ...read 102,000,000 lines
+    ...read 104,000,000 lines
+    ...read 106,000,000 lines
+    ...read 108,000,000 lines
+    ...read 110,000,000 lines
+    ...read 112,000,000 lines
+    ...read 114,000,000 lines
+    ...read 116,000,000 lines
+    ...read 118,000,000 lines
+    ...read 120,000,000 lines
+    ...read 122,000,000 lines
+    ...read 124,000,000 lines
+    ...read 126,000,000 lines
+    ...read 128,000,000 lines
+    ...read 130,000,000 lines
+    ...read 132,000,000 lines
+    ...read 134,000,000 lines
+    ...read 136,000,000 lines
+    ...read 138,000,000 lines
+    ...read 140,000,000 lines
+    ...read 142,000,000 lines
+    ...read 144,000,000 lines
+    ...read 146,000,000 lines
+    ...read 148,000,000 lines
+    ...read 150,000,000 lines
+    ...read 152,000,000 lines
+    ...read 154,000,000 lines
+    ...read 156,000,000 lines
+    ...read 158,000,000 lines
+    ...read 160,000,000 lines
+    ...read 162,000,000 lines
+    ...read 164,000,000 lines
+    ...read 166,000,000 lines
+    ...read 168,000,000 lines
+    ...read 170,000,000 lines
+    ...read 172,000,000 lines
+    ...read 174,000,000 lines
+    ...read 176,000,000 lines
+    ...read 178,000,000 lines
+  source          paths-002.tgz
+  population      179,316,708 paths seen
+  sampled         5,000,000 (2.8%, uniform reservoir)
+  avg depth       16.21 components
+  total comps     81,038,051
+  depth spread    1:10, 4:252, 5:887, 6:7,017, 7:8,019, 8:20,380, 9:132,354, 10:88,696, 11:132,654, 12:237,583, 13:476,948, 14:969,174
+
+================================================================================================
+  SCALE: 500,000 source paths, 8 media, dup-ratio 0.15
+================================================================================================
+    ...copied 500,000/565,915 rows
+
+  ROWS 565,915  (incl. cross-media duplicates)
+  loaded in 52.8s; interning 4.9s
+
+  DICTIONARY  [Q2: does interning earn its keep?]
+    distinct components   489,965
+    component references  8,104,403
+    interning ratio       16.5x reuse
+
+  STORAGE
+    table                   total       heap    indexes
+    data_entries           593 MB     273 MB     321 MB
+    path_elements           76 MB      33 MB      43 MB
+    mime_types              48 kB 8192 bytes      32 kB
+    items                   32 kB 8192 bytes      16 kB
+
+  Q2 VERDICT — is the dictionary worth it?   (means over 200,000 sampled rows)
+    KEEP path_text (today: both stored)   238.6 MB
+      path_text                           92.7 MB
+      path_ids                            70.0 MB   <- read by NOTHING today
+      path_elements (+idx)                76.0 MB
+    DROP path_text, rebuild from ids      146.0 MB
+    KEEP ids only if text is dropped      92.7 MB -> 146.0 MB   (COSTS 53.3 MB, -58%)
+    NOTE dropping path_text also costs the (item_id, path_text) index and the
+         ORDER BY path_text that entriesOf depends on — this is a storage
+         number, not a free win. Weigh it against the query section below.
+
+  QUERY                                    plan                                     ms
+  --------------------------------------------------------------------------------------------
+  entriesOf (no filter)                    ->  Index Scan using idx_data_entries_     2.15
+  entriesOf SUBSTRING  [the question]      ->  Parallel Seq Scan on data_entries     90.64
+  summaryOf                                ->  Parallel Seq Scan on data_entries     40.95
+  findByHash                               ->  Index Scan using idx_data_entries_     0.78
+  findMirrorsOf                            ->  Parallel Seq Scan on data_entries    196.65
+
+  adding pg_trgm GIN on lower(path_text) and re-measuring the substring query...
+  entriesOf SUBSTRING  [with trgm]         ->  Bitmap Heap Scan on data_entries e     6.15
+
+  needle-length sweep (trigram selectivity is the real cost driver):
+    needle            len        ms   plan
+    'mnt'               3      1.05   ->  Index Scan using idx_data_entries_item_p
+    'mntm'              4      6.52   ->  Bitmap Heap Scan on data_entries e  (cos
+    'mntme'             5      3.30   ->  Bitmap Heap Scan on data_entries e  (cos
+    'mntmedia'          8     12.97   ->  Bitmap Heap Scan on data_entries e  (cos
+    'mntmediax.sn'     12     24.47   ->  Bitmap Heap Scan on data_entries e  (cos
+    NOTE the first run of this sweep refuted the assumption behind it. Short,
+    COMMON needles came back FASTEST (0.33ms for 'lib') by walking the
+    (item_id, path_text) btree in ORDER BY order and stopping at LIMIT 100;
+    long, RARE needles were slowest (7.66ms) because the planner must look
+    far down that order to fill 100 rows, so it falls back to the trigram
+    bitmap. Selectivity drives cost, but ORDER BY + LIMIT inverts which end
+    hurts: the worst case is a needle that matches almost nothing, not one
+    that matches everything.
+
+  trgm index: built in 26.7s, 152 MB on disk
+  substring query 90.64ms -> 6.15ms  (14.7x)  => WORTH IT
+
+  adding (path_hash, hash) and re-measuring findMirrorsOf...
+  findMirrorsOf  [with composite]          ->  Parallel Seq Scan on data_entries    179.14
+
+  mirror index: 47 MB on disk
+  findMirrorsOf 196.65ms -> 179.14ms  (1.1x)  => NOT clearly worth it
+
+================================================================================================
+  SCALE: 2,000,000 source paths, 8 media, dup-ratio 0.15
+================================================================================================
+    ...copied 500,000/2,261,915 rows
+    ...copied 1,000,000/2,261,915 rows
+    ...copied 1,500,000/2,261,915 rows
+    ...copied 2,000,000/2,261,915 rows
+
+  ROWS 2,261,915  (incl. cross-media duplicates)
+  loaded in 345.1s; interning 14.1s
+
+  DICTIONARY  [Q2: does interning earn its keep?]
+    distinct components   1,210,842
+    component references  32,415,507
+    interning ratio       26.8x reuse
+
+  STORAGE
+    table                   total       heap    indexes
+    data_entries          2374 MB    1090 MB    1284 MB
+    path_elements          191 MB      84 MB     107 MB
+    mime_types              48 kB 8192 bytes      32 kB
+    items                   32 kB 8192 bytes      16 kB
+
+  Q2 VERDICT — is the dictionary worth it?   (means over 200,000 sampled rows)
+    KEEP path_text (today: both stored)   840.5 MB
+      path_text                           370.1 MB
+      path_ids                            279.7 MB   <- read by NOTHING today
+      path_elements (+idx)                190.7 MB
+    DROP path_text, rebuild from ids      470.4 MB
+    KEEP ids only if text is dropped      370.1 MB -> 470.4 MB   (COSTS 100.4 MB, -27%)
+    NOTE dropping path_text also costs the (item_id, path_text) index and the
+         ORDER BY path_text that entriesOf depends on — this is a storage
+         number, not a free win. Weigh it against the query section below.
+
+  QUERY                                    plan                                     ms
+  --------------------------------------------------------------------------------------------
+  entriesOf (no filter)                    ->  Index Scan using idx_data_entries_     3.66
+  entriesOf SUBSTRING  [the question]      ->  Parallel Seq Scan on data_entries    447.53
+  summaryOf                                ->  Parallel Seq Scan on data_entries    311.81
+  findByHash                               ->  Index Scan using idx_data_entries_     0.34
+  findMirrorsOf                            ->  Parallel Seq Scan on data_entries   2311.47
+
+  adding pg_trgm GIN on lower(path_text) and re-measuring the substring query...
+  entriesOf SUBSTRING  [with trgm]         ->  Bitmap Heap Scan on data_entries e   287.18
+
+  needle-length sweep (trigram selectivity is the real cost driver):
+    needle            len        ms   plan
+    'mnt'               3      3.51   ->  Index Scan using idx_data_entries_item_p
+    'mntm'              4     75.86   ->  Bitmap Heap Scan on data_entries e  (cos
+    'mntme'             5     15.19   ->  Bitmap Heap Scan on data_entries e  (cos
+    'mntmedia'          8     76.95   ->  Bitmap Heap Scan on data_entries e  (cos
+    'mntmediax.sn'     12    117.12   ->  Bitmap Heap Scan on data_entries e  (cos
+    NOTE the first run of this sweep refuted the assumption behind it. Short,
+    COMMON needles came back FASTEST (0.33ms for 'lib') by walking the
+    (item_id, path_text) btree in ORDER BY order and stopping at LIMIT 100;
+    long, RARE needles were slowest (7.66ms) because the planner must look
+    far down that order to fill 100 rows, so it falls back to the trigram
+    bitmap. Selectivity drives cost, but ORDER BY + LIMIT inverts which end
+    hurts: the worst case is a needle that matches almost nothing, not one
+    that matches everything.
+
+  trgm index: built in 123.4s, 537 MB on disk
+  substring query 447.53ms -> 287.18ms  (1.6x)  => NOT clearly worth it
+
+  adding (path_hash, hash) and re-measuring findMirrorsOf...
+  findMirrorsOf  [with composite]          ->  Parallel Seq Scan on data_entries   1454.97
+
+  mirror index: 186 MB on disk
+  findMirrorsOf 2311.47ms -> 1454.97ms  (1.6x)  => NOT clearly worth it
+
+================================================================================================
+  SCALE: 5,000,000 source paths, 8 media, dup-ratio 0.15
+================================================================================================
+    ...copied 500,000/5,657,032 rows
+    ...copied 1,000,000/5,657,032 rows
+    ...copied 1,500,000/5,657,032 rows
+    ...copied 2,000,000/5,657,032 rows
+    ...copied 2,500,000/5,657,032 rows
+    ...copied 3,000,000/5,657,032 rows
+    ...copied 3,500,000/5,657,032 rows
+    ...copied 4,000,000/5,657,032 rows
+    ...copied 4,500,000/5,657,032 rows
+    ...copied 5,000,000/5,657,032 rows
+    ...copied 5,500,000/5,657,032 rows
+
+  ROWS 5,657,032  (incl. cross-media duplicates)
+  loaded in 1702.2s; interning 33.0s
+
+  DICTIONARY  [Q2: does interning earn its keep?]
+    distinct components   1,920,876
+    component references  81,038,051
+    interning ratio       42.2x reuse
+
+  STORAGE
+    table                   total       heap    indexes
+    data_entries          5938 MB    2726 MB    3212 MB
+    path_elements          306 MB     134 MB     172 MB
+    mime_types              48 kB 8192 bytes      32 kB
+    items                   32 kB 8192 bytes      16 kB
+
+  Q2 VERDICT — is the dictionary worth it?   (means over 200,000 sampled rows)
+    KEEP path_text (today: both stored)   1931.4 MB
+      path_text                           925.8 MB
+      path_ids                            699.9 MB   <- read by NOTHING today
+      path_elements (+idx)                305.7 MB
+    DROP path_text, rebuild from ids      1005.6 MB
+    KEEP ids only if text is dropped      925.8 MB -> 1005.6 MB   (COSTS 79.8 MB, -9%)
+    NOTE dropping path_text also costs the (item_id, path_text) index and the
+         ORDER BY path_text that entriesOf depends on — this is a storage
+         number, not a free win. Weigh it against the query section below.
+
+  QUERY                                    plan                                     ms
+  --------------------------------------------------------------------------------------------
+  entriesOf (no filter)                    ->  Index Scan using idx_data_entries_     3.00
+  entriesOf SUBSTRING  [the question]      ->  Parallel Seq Scan on data_entries    873.20
+  summaryOf                                ->  Parallel Seq Scan on data_entries    416.27
+  findByHash                               ->  Index Scan using idx_data_entries_     0.24
+  findMirrorsOf                            ->  Parallel Seq Scan on data_entries   4258.61
+
+  adding pg_trgm GIN on lower(path_text) and re-measuring the substring query...
+  entriesOf SUBSTRING  [with trgm]         ->  Bitmap Heap Scan on data_entries e    35.19
+
+  needle-length sweep (trigram selectivity is the real cost driver):
+    needle            len        ms   plan
+    'mnt'               3      3.86   ->  Index Scan using idx_data_entries_item_p
+    'mntm'              4    145.04   ->  Bitmap Heap Scan on data_entries e  (cos
+    'mntme'             5     32.81   ->  Bitmap Heap Scan on data_entries e  (cos
+    'mntmedia'          8    126.70   ->  Bitmap Heap Scan on data_entries e  (cos
+    'mntmediax.sn'     12    269.73   ->  Bitmap Heap Scan on data_entries e  (cos
+    NOTE the first run of this sweep refuted the assumption behind it. Short,
+    COMMON needles came back FASTEST (0.33ms for 'lib') by walking the
+    (item_id, path_text) btree in ORDER BY order and stopping at LIMIT 100;
+    long, RARE needles were slowest (7.66ms) because the planner must look
+    far down that order to fill 100 rows, so it falls back to the trigram
+    bitmap. Selectivity drives cost, but ORDER BY + LIMIT inverts which end
+    hurts: the worst case is a needle that matches almost nothing, not one
+    that matches everything.
+
+  trgm index: built in 319.4s, 1246 MB on disk
+  substring query 873.20ms -> 35.19ms  (24.8x)  => WORTH IT
+
+  adding (path_hash, hash) and re-measuring findMirrorsOf...
+  findMirrorsOf  [with composite]          ->  Parallel Seq Scan on data_entries   3853.21
+
+  mirror index: 466 MB on disk
+  findMirrorsOf 4258.61ms -> 3853.21ms  (1.1x)  => NOT clearly worth it
+
+  (removed container pathmeasure-pg)
+
+================================================================================================
+  Read the substring row first: if it is a Seq Scan whose ms grows with scale,
+  005-data.yaml wants a pg_trgm GIN index and this is the moment to add it.
+================================================================================================

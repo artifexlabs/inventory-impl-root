@@ -59,7 +59,8 @@ public class ArchiveSource implements ContentSource {
     ZipEntry e = this.zip.getEntry(path);
     if (e == null || e.isDirectory())
       return null;
-    Instant modified = e.getLastModifiedTime() == null ? null : e.getLastModifiedTime().toInstant();
+    Instant modified = e.getLastModifiedTime() == null ? null
+        : e.getLastModifiedTime().toInstant().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
     // getSize() is the UNCOMPRESSED size, which is what the scanner recorded and
     // therefore what the manifest is describing
     return new Stat(e.getSize() < 0 ? 0L : e.getSize(), modified);
