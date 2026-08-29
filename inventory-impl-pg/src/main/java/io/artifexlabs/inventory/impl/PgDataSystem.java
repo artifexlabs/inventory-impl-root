@@ -35,7 +35,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
 
+import io.artifexlabs.inventory.api.AuditEvent;
 import io.artifexlabs.inventory.api.DataEntry;
+import io.artifexlabs.inventory.api.DefaultAuditEvent;
 import io.artifexlabs.inventory.api.DataInfo;
 import io.artifexlabs.inventory.api.DataTree;
 import io.artifexlabs.inventory.api.DataSystem;
@@ -294,15 +296,39 @@ public class PgDataSystem implements DataSystem {
   private final PgInventorySystem items;
   private final String principal;
 
+  private io.artifexlabs.inventory.api.events.EventPublisher events = io.artifexlabs.inventory.api.events.EventPublisher.NOOP;
+
   public PgDataSystem(io.vertx.mutiny.sqlclient.Pool pool, PgInventorySystem items, String principal) {
     this.pool = requireNonNull(pool, "pool");
     this.items = requireNonNull(items, "items");
     this.principal = requireNonNull(principal, "principal");
   }
 
+  /**
+   * Publish committed facts to this publisher (default: nowhere). The in-memory twin publishes through the decorated
+   * audit sink for free; this backend writes its audit rows inside the transaction, so it has to announce by hand after
+   * commit — the same fact, the same id, or the two backends emit different things for one operation.
+   */
+  public PgDataSystem withEventPublisher(io.artifexlabs.inventory.api.events.EventPublisher events) {
+    this.events = requireNonNull(events, "events");
+    return this;
+  }
+
   @Override
   public PgDataSystem actingAs(String principal) {
-    return new PgDataSystem(this.pool, this.items, principal);
+    return new PgDataSystem(this.pool, this.items, principal).withEventPublisher(this.events);
+  }
+
+  /**
+   * The audit rows one operation wrote, announced only once the transaction has committed. A rollback leaves the list
+   * unpublished; a fact announced for a change that never happened is worse than no fact at all.
+   */
+  private <T> CompletionStage<T> announce(Uni<T> tx, List<AuditEvent> facts, java.util.function.Predicate<T> happened) {
+    return tx.subscribeAsCompletionStage().whenComplete((result, failure) -> {
+      if (failure == null && result != null && happened.test(result))
+        for (AuditEvent fact : facts)
+          this.events.publish(fact);
+    });
   }
 
   // ---- writes -----------------------------------------------------------
@@ -310,7 +336,8 @@ public class PgDataSystem implements DataSystem {
   @Override
   public CompletionStage<Optional<Integer>> replaceManifest(String itemId, List<DataEntry> entries) {
     List<DataEntry> submitted = entries == null ? List.of() : List.copyOf(entries);
-    return this.pool.withTransaction(conn -> holdsData(conn, itemId).flatMap(ok -> {
+    List<AuditEvent> facts = new ArrayList<>();
+    return announce(this.pool.withTransaction(conn -> holdsData(conn, itemId).flatMap(ok -> {
       if (!ok)
         return Uni.createFrom().item(Optional.<Integer>empty());
       // Archive items are NOT retired up front. That is what used to make an
@@ -319,28 +346,28 @@ public class PgDataSystem implements DataSystem {
       // a fresh ULID besides — so a medium's own hashes survived a re-describe
       // and its archives' never could. storeScope now reuses the item sitting at
       // a path that came back, and reaps only what this description dropped.
-      return storeScope(conn, itemId, submitted)
+      return storeScope(conn, itemId, submitted, facts)
           .flatMap(
-              count -> audit(conn, "data.replace", itemId,
+              count -> audit(conn, facts, "data.replace", itemId,
                   new JsonObject().put("entries", count).put("bytes", totalBytes(submitted)).put("archives",
                       (int) submitted.stream().filter(DataEntry::isArchive).count()))
                   .map(ignored -> Optional.of(count)));
-    })).subscribeAsCompletionStage();
+    })), facts, Optional::isPresent);
   }
 
   /** One scope's rows, reusing or minting an item per archive and recursing into it. */
-  private Uni<Integer> storeScope(SqlConnection conn, String itemId, List<DataEntry> entries) {
+  private Uni<Integer> storeScope(SqlConnection conn, String itemId, List<DataEntry> entries, List<AuditEvent> facts) {
     // which archive item sat at which path, read while the old rows still exist
     return conn.preparedQuery(SURVIVING_ARCHIVES).execute(Tuple.of(itemId)).flatMap(previous -> {
       Map<String, String> archiveAt = new LinkedHashMap<>();
       for (Row row : previous)
         archiveAt.put(row.getString("path_text"), row.getString("archive_item_id"));
-      return storeScope(conn, itemId, entries, archiveAt);
+      return storeScope(conn, itemId, entries, archiveAt, facts);
     });
   }
 
   private Uni<Integer> storeScope(SqlConnection conn, String itemId, List<DataEntry> entries,
-      Map<String, String> archiveAt) {
+      Map<String, String> archiveAt, List<AuditEvent> facts) {
     return conn.query(DROP_CARRIED).execute().flatMap(dropped -> conn.query(DROP_PARKED_DAMAGE).execute())
         .flatMap(dropped -> conn.preparedQuery(PARK_HASHES).execute(Tuple.of(itemId)))
         .flatMap(parked -> conn.preparedQuery(PARK_DAMAGE).execute(Tuple.of(itemId)))
@@ -375,12 +402,12 @@ public class PgDataSystem implements DataSystem {
                 continue;
               chain = chain.flatMap(running -> {
                 String existing = archiveAt.get(entry.path());
-                Uni<String> resolved = existing == null ? mintArchive(conn, itemId, entry)
+                Uni<String> resolved = existing == null ? mintArchive(conn, itemId, entry, facts)
                     : Uni.createFrom().item(existing);
                 return resolved.flatMap(archiveId -> {
                   kept.add(archiveId);
                   return conn.preparedQuery(LINK_ARCHIVE).execute(Tuple.of(itemId, entry.path(), archiveId))
-                      .flatMap(linked -> storeScope(conn, archiveId, entry.archiveContents()))
+                      .flatMap(linked -> storeScope(conn, archiveId, entry.archiveContents(), facts))
                       .map(inner -> running + inner);
                 });
               });
@@ -395,7 +422,7 @@ public class PgDataSystem implements DataSystem {
    * An archive is a file AND a container, so it earns an item of its own — created here rather than through
    * InventorySystem because the whole manifest must land in ONE transaction.
    */
-  private Uni<String> mintArchive(SqlConnection conn, String containerId, DataEntry entry) {
+  private Uni<String> mintArchive(SqlConnection conn, String containerId, DataEntry entry, List<AuditEvent> facts) {
     String id = Ulid.next();
     return conn.preparedQuery("""
         INSERT INTO items (id, name, display_name, type, container_id, ts,
@@ -403,7 +430,7 @@ public class PgDataSystem implements DataSystem {
         VALUES ($1, $2, $2, 'archive', $3, $4, $5, false, true)""")
         .execute(Tuple.of(id, entry.fileName(), containerId, OffsetDateTime.now(ZoneOffset.UTC),
             MediaKind.PHYSICAL_MEDIA.name()))
-        .flatMap(r -> audit(conn, "item.create", id,
+        .flatMap(r -> audit(conn, facts, "item.create", id,
             new JsonObject().put("name", entry.fileName()).put("archiveOf", containerId)))
         .map(v -> id);
   }
@@ -431,7 +458,8 @@ public class PgDataSystem implements DataSystem {
   public CompletionStage<Integer> renamePath(String itemId, String fromPath, String toPath) {
     String from = DataEntry.normalizePath(fromPath);
     String to = DataEntry.normalizePath(toPath);
-    return this.pool.withTransaction(
+    List<AuditEvent> facts = new ArrayList<>();
+    return announce(this.pool.withTransaction(
         conn -> conn.preparedQuery(RENAME_SELECT).execute(Tuple.of(itemId, from, from + "/%")).flatMap(rows -> {
           List<String> affected = new ArrayList<>();
           for (Row r : rows)
@@ -449,10 +477,10 @@ public class PgDataSystem implements DataSystem {
               chain = chain.flatMap(running -> conn.preparedQuery(RENAME_ONE)
                   .execute(Tuple.of(itemId, old, pathIds(moved, ids), digest(moved), moved)).map(r -> running + 1));
             }
-            return chain.flatMap(count -> audit(conn, "data.rename", itemId,
+            return chain.flatMap(count -> audit(conn, facts, "data.rename", itemId,
                 new JsonObject().put("from", from).put("to", to).put("entries", count)).map(v -> count));
           });
-        })).subscribeAsCompletionStage();
+        })), facts, count -> count > 0);
   }
 
   // ---- reads ------------------------------------------------------------
@@ -686,11 +714,18 @@ public class PgDataSystem implements DataSystem {
     });
   }
 
-  private Uni<Void> audit(SqlConnection conn, String action, String targetId, JsonObject details) {
-    return conn.preparedQuery(INSERT_AUDIT)
-        .execute(
-            Tuple.of(Ulid.next(), OffsetDateTime.now(ZoneOffset.UTC).truncatedTo(java.time.temporal.ChronoUnit.MICROS),
-                this.principal, action, targetId, details))
+  /**
+   * Write the audit row AND remember the fact, so the announcement after commit carries the row's own id — a consumer
+   * dedupes by id, and two ids for one event would defeat that.
+   */
+  private Uni<Void> audit(SqlConnection conn, List<AuditEvent> facts, String action, String targetId,
+      JsonObject details) {
+    AuditEvent fact = new DefaultAuditEvent(Ulid.next(),
+        Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS), this.principal, action, targetId, details);
+    facts.add(fact);
+    return conn
+        .preparedQuery(INSERT_AUDIT).execute(Tuple.of(fact.getId(),
+            OffsetDateTime.ofInstant(fact.getTimestamp(), ZoneOffset.UTC), this.principal, action, targetId, details))
         .replaceWithVoid();
   }
 
