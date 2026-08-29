@@ -6,3 +6,4 @@ release.properties
 *.log
 *.iml
 .flattened-pom.xml
+src/test/resources/measurements/manifest*

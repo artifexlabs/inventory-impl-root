@@ -1,0 +1,14 @@
+100	2026-01-01T00:00:00.0000000000	/fixture/photos/2019/a.jpg
+200	2026-01-01T00:00:00.0000000000	/fixture/photos/2019/b.jpg
+300	2026-01-01T00:00:00.0000000000	/fixture/photos/2019/sub/c.jpg
+5	2026-01-01T00:00:00.0000000000	/fixture/photos/readme.txt
+100	2026-01-01T00:00:00.0000000000	/fixture/backup/old/photos/2019/a.jpg
+200	2026-01-01T00:00:00.0000000000	/fixture/backup/old/photos/2019/b.jpg
+300	2026-01-01T00:00:00.0000000000	/fixture/backup/old/photos/2019/sub/c.jpg
+7	2026-01-01T00:00:00.0000000000	/fixture/root-file.bin
+42	2026-01-01T00:00:00.0000000000	/fixture/naïve/日本語/файл.txt
+1	2026-01-01T00:00:00.0000000000	/fixture/zeros/x.bin
+0	2026-01-01T00:00:00.0000000000	/fixture/zeros/y.bin
+		/fixture/photos/2019/emptyA/
+		/fixture/only-empties/deep/er/
+		/fixture/only-empties/other/

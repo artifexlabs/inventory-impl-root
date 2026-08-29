@@ -1,0 +1,271 @@
+================================================================================================
+  STRUCTURE ANALYSIS — duplicated sections of one medium (PLAN.md Phase 23, stage 1 question)
+================================================================================================
+  manifest       manifest.tsv.gz
+  root           /mnt/mediaX
+  files          119,851,226
+  bytes          1,523,412,856,759,774  (1.4 PB)
+  directories    5,002,562 with >= 8 files (smaller ones folded but not kept — the floor, see DataSystem.SectionQuery.sane)
+  fold           131,553,483 lines in 1088s; DFS violations 0; skipped 285; names not valid UTF-8 410 (stored with U+FFFD — a known gap: no hasher can open them by their stored path)
+
+  SNAPSHOT GENERATIONS: 13
+    structurally distinct generations: 11 of 13
+    generations structurally IDENTICAL to the previous one: 2
+    .snapshots/5548/snapshot                      9,961,466 files     113.0 TB  c453eed9275563f7
+    .snapshots/5572/snapshot                      9,962,068 files     113.1 TB  c7e08e460f6b020f
+    .snapshots/5596/snapshot                      9,963,539 files     113.3 TB  2dcb342bfc2f74f5
+    .snapshots/5620/snapshot                      9,963,922 files     113.4 TB  82e4b728f56da32d
+    .snapshots/5625/snapshot                        313,727 files      28.7 TB  5611b9f8e7bdf7af
+    ... (8 earlier generations)
+  top-level entries OUTSIDE .snapshots: 0 directories, 0 files, 0 B
+
+  DUPLICATED SECTIONS — whole medium (generations of a snapshot will dominate; that is real, and it is the boring answer)
+    duplicated identities (>= floor): 223,654; naive redundant bytes across ALL of them (nested copies counted repeatedly): 4.4 PB
+    top 25 MAXIMAL sections by redundant bytes (parent not itself duplicated):
+    places        files   bytes/copy    redundant  where
+        11    9,540,804      37.9 TB     379.1 TB  .snapshots/5161/snapshot/Backups
+                                                   .snapshots/5436/snapshot/Backups
+                                                   .snapshots/5460/snapshot/Backups
+                                                   .snapshots/5484/snapshot/Backups
+                                                   ... and 7 more
+         3    9,960,693     112.8 TB     225.7 TB  .snapshots/5484
+                                                   .snapshots/5508
+                                                   .snapshots/5532
+        12    1,454,648       8.6 TB      95.0 TB  .snapshots/5160/snapshot/Backups/mediaE
+                                                   .snapshots/5161/snapshot/Backups/mediaE
+                                                   .snapshots/5436/snapshot/Backups/mediaE
+                                                   .snapshots/5460/snapshot/Backups/mediaE
+                                                   ... and 8 more
+         4       86,105      28.4 TB      85.1 TB  .snapshots/5484/snapshot/TV.Shows
+                                                   .snapshots/5508/snapshot/TV.Shows
+                                                   .snapshots/5532/snapshot/TV.Shows
+                                                   .snapshots/5538/snapshot/TV.Shows
+         4       19,244      27.4 TB      82.3 TB  .snapshots/5484/snapshot/Movies
+                                                   .snapshots/5508/snapshot/Movies
+                                                   .snapshots/5532/snapshot/Movies
+                                                   .snapshots/5538/snapshot/Movies
+        12    2,980,829       6.8 TB      74.4 TB  .snapshots/5160/snapshot/Backups/media8
+                                                   .snapshots/5161/snapshot/Backups/media8
+                                                   .snapshots/5436/snapshot/Backups/media8
+                                                   .snapshots/5460/snapshot/Backups/media8
+                                                   ... and 8 more
+         6      260,269      11.8 TB      58.9 TB  .snapshots/5436/snapshot/books_etc
+                                                   .snapshots/5460/snapshot/books_etc
+                                                   .snapshots/5484/snapshot/books_etc
+                                                   .snapshots/5508/snapshot/books_etc
+                                                   ... and 2 more
+        12    1,595,745       5.0 TB      54.9 TB  .snapshots/5160/snapshot/Backups/MEDIAB2
+                                                   .snapshots/5161/snapshot/Backups/MEDIAB2
+                                                   .snapshots/5436/snapshot/Backups/MEDIAB2
+                                                   .snapshots/5460/snapshot/Backups/MEDIAB2
+                                                   ... and 8 more
+        12      942,395       4.8 TB      52.4 TB  .snapshots/5160/snapshot/Backups/media2
+                                                   .snapshots/5161/snapshot/Backups/media2
+                                                   .snapshots/5436/snapshot/Backups/media2
+                                                   .snapshots/5460/snapshot/Backups/media2
+                                                   ... and 8 more
+        12    1,531,972       4.3 TB      46.8 TB  .snapshots/5160/snapshot/Backups/media9
+                                                   .snapshots/5161/snapshot/Backups/media9
+                                                   .snapshots/5436/snapshot/Backups/media9
+                                                   .snapshots/5460/snapshot/Backups/media9
+                                                   ... and 8 more
+        12       36,262       4.0 TB      44.0 TB  .snapshots/5160/snapshot/Backups/media5
+                                                   .snapshots/5161/snapshot/Backups/media5
+                                                   .snapshots/5436/snapshot/Backups/media5
+                                                   .snapshots/5460/snapshot/Backups/media5
+                                                   ... and 8 more
+         7       93,967       6.5 TB      38.8 TB  .snapshots/5436/snapshot/books_etc/tmp_training_complete
+                                                   .snapshots/5460/snapshot/books_etc/tmp_training_complete
+                                                   .snapshots/5484/snapshot/books_etc/tmp_training_complete
+                                                   .snapshots/5508/snapshot/books_etc/tmp_training_complete
+                                                   ... and 3 more
+        10       10,429       3.4 TB      30.3 TB  .snapshots/5160/snapshot/HELD
+                                                   .snapshots/5161/snapshot/HELD
+                                                   .snapshots/5436/snapshot/HELD
+                                                   .snapshots/5460/snapshot/HELD
+                                                   ... and 6 more
+         2       86,965      28.5 TB      28.5 TB  .snapshots/5596/snapshot/TV.Shows
+                                                   .snapshots/5620/snapshot/TV.Shows
+         2       85,861      28.4 TB      28.4 TB  .snapshots/5160/snapshot/TV.Shows
+                                                   .snapshots/5161/snapshot/TV.Shows
+         2       19,459      27.6 TB      27.6 TB  .snapshots/5596/snapshot/Movies
+                                                   .snapshots/5620/snapshot/Movies
+         2       19,234      27.4 TB      27.4 TB  .snapshots/5436/snapshot/Movies
+                                                   .snapshots/5460/snapshot/Movies
+         2       19,157      27.4 TB      27.4 TB  .snapshots/5160/snapshot/Movies
+                                                   .snapshots/5161/snapshot/Movies
+        13       34,490       1.6 TB      19.2 TB  .snapshots/5160/snapshot/books_etc/tmp_STL_complete
+                                                   .snapshots/5161/snapshot/books_etc/tmp_STL_complete
+                                                   .snapshots/5436/snapshot/books_etc/tmp_STL_complete
+                                                   .snapshots/5460/snapshot/books_etc/tmp_STL_complete
+                                                   ... and 9 more
+        12      249,724       1.7 TB      19.2 TB  .snapshots/5160/snapshot/Backups/media1
+                                                   .snapshots/5161/snapshot/Backups/media1
+                                                   .snapshots/5436/snapshot/Backups/media1
+                                                   .snapshots/5460/snapshot/Backups/media1
+                                                   ... and 8 more
+        12        3,428       1.4 TB      14.9 TB  .snapshots/5160/snapshot/Documentary.TV
+                                                   .snapshots/5161/snapshot/Documentary.TV
+                                                   .snapshots/5436/snapshot/Documentary.TV
+                                                   .snapshots/5460/snapshot/Documentary.TV
+                                                   ... and 8 more
+        13          323       1.1 TB      13.6 TB  .snapshots/5160/snapshot/TV.Shows/Criminal Minds S01-S15 1080p WEB H264-Mixed
+                                                   .snapshots/5161/snapshot/TV.Shows/Criminal Minds S01-S15 1080p WEB H264-Mixed
+                                                   .snapshots/5436/snapshot/TV.Shows/Criminal Minds S01-S15 1080p WEB H264-Mixed
+                                                   .snapshots/5460/snapshot/TV.Shows/Criminal Minds S01-S15 1080p WEB H264-Mixed
+                                                   ... and 9 more
+        12       27,693       1.2 TB      12.9 TB  .snapshots/5160/snapshot/Backups/media7
+                                                   .snapshots/5161/snapshot/Backups/media7
+                                                   .snapshots/5436/snapshot/Backups/media7
+                                                   .snapshots/5460/snapshot/Backups/media7
+                                                   ... and 8 more
+         2      260,243      12.0 TB      12.0 TB  .snapshots/5160/snapshot/books_etc
+                                                   .snapshots/5161/snapshot/books_etc
+        12       12,863     873.7 GB       9.4 TB  .snapshots/5160/snapshot/Instructional
+                                                   .snapshots/5161/snapshot/Instructional
+                                                   .snapshots/5436/snapshot/Instructional
+                                                   .snapshots/5460/snapshot/Instructional
+                                                   ... and 8 more
+
+  DUPLICATED SECTIONS — WITHIN the latest generation only (.snapshots/5625/snapshot) — the interesting answer
+    duplicated identities (>= floor): 379; naive redundant bytes across ALL of them (nested copies counted repeatedly): 198.0 GB
+    top 25 MAXIMAL sections by redundant bytes (parent not itself duplicated):
+    places        files   bytes/copy    redundant  where
+         2           28      18.8 GB      18.8 GB  .snapshots/5625/snapshot/TV.Shows/Game Changer - Season 5 [1080p.WEB-DL]
+                                                   .snapshots/5625/snapshot/TV.Shows/Game.Changer/Game Changer - Season 5 [1080p.WEB-DL]
+         2           92      12.5 GB      12.5 GB  .snapshots/5625/snapshot/books_etc/tmp_books_complete/CBTNuggets.Red.Hat.Certified.System.Administrator.RHCSA.Exam.EX200-AG
+                                                   .snapshots/5625/snapshot/books_etc/tmp_training_complete/CBTNuggets.Red.Hat.Certified.System.Administrator.RHCSA.Exam.EX200-AG
+         2            9      11.5 GB      11.5 GB  .snapshots/5625/snapshot/TV.Shows/Game.Changer.S06.1080p.DRPO.WEB-DL.AAC2.0.x264-BFM
+                                                   .snapshots/5625/snapshot/TV.Shows/Game.Changer/Game.Changer.S06.1080p.DRPO.WEB-DL.AAC2.0.x264-BFM
+         2           22      10.0 GB      10.0 GB  .snapshots/5625/snapshot/TV.Shows/Game Changer - Season 4 [1080p.WEB-DL]
+                                                   .snapshots/5625/snapshot/TV.Shows/Game.Changer/Game Changer - Season 4 [1080p.WEB-DL]
+         2           30       9.9 GB       9.9 GB  .snapshots/5625/snapshot/TV.Shows/Game Changer - Season 3 [1080p.WEB-DL]
+                                                   .snapshots/5625/snapshot/TV.Shows/Game.Changer/Game Changer - Season 3 [1080p.WEB-DL]
+         2           12       6.9 GB       6.9 GB  .snapshots/5625/snapshot/books_etc/tmp_training_complete/Udemy.Modern.JavaScript.From.The.Beginning-UDUMMY
+                                                   .snapshots/5625/snapshot/books_etc/tmp_training_complete/Udemy.Modern.JavaScript.From.The.Beginning-UDUMMY__KcPiPw/Udemy.Modern.JavaScript.From.The.Beginning-UDUMMY
+         2           23       6.6 GB       6.6 GB  .snapshots/5625/snapshot/books_etc/tmp_instructional_complete/Udemy.Modern.JavaScript.and.Software.Front.End.Development.BOOKWARE-BOOKTIME
+                                                   .snapshots/5625/snapshot/books_etc/tmp_training_complete/Udemy.Modern.JavaScript.and.Software.Front.End.Development.BOOKWARE-BOOKTIME
+         3           44       1.9 GB       3.9 GB  .snapshots/5625/snapshot/books_etc/tmp_instructional_complete/UDEMY.Grafana.Beginners.to.Advance.Crash.Course.2021.BOOKWARE-iLEARN
+                                                   .snapshots/5625/snapshot/books_etc/tmp_instructional_complete/UDEMY.Grafana.Beginners.to.Advance.Crash.Course.2021.BOOKWARE-iLEARN__bdxcMr/UDEMY.Grafana.Beginners.to.Advance.Crash.Course.2021.BOOKWARE-iLEARN
+                                                   .snapshots/5625/snapshot/books_etc/tmp_training_complete/UDEMY.Grafana.Beginners.to.Advance.Crash.Course.2021.BOOKWARE-iLEARN
+         2           51       3.2 GB       3.2 GB  .snapshots/5625/snapshot/books_etc/tmp_STL_complete/B3dserk Batman 1989 Michael Keaton Sculpture Statue Model 3D STL/B3DSERK - Batman Statue 312mm (Non Supported)
+                                                   .snapshots/5625/snapshot/books_etc/tmp_STL_complete/B3dserk DC Batman 1989 Michael Keaton Sculpture Figure Statue Model Design 3D STL/B3DSERK - Batman Statue 312mm (Non Supported)
+         2           56       2.9 GB       2.9 GB  .snapshots/5625/snapshot/books_etc/tmp_STL_complete/Wicked Marvel Kraven Sculpture 3D STL
+                                                   .snapshots/5625/snapshot/books_etc/tmp_STL_complete/Wicked Marvel Kraven the Hunter Sculpture Statue Model 3D STL
+         3           28       1.3 GB       2.5 GB  .snapshots/5625/snapshot/books_etc/tmp_instructional_complete/UDEMY.Become.a.Blockchain.Developer.Ethereum.plus.Solidity.plus.Project.BOOKWARE-iLEARN
+                                                   .snapshots/5625/snapshot/books_etc/tmp_instructional_complete/UDEMY.Become.a.Blockchain.Developer.Ethereum.plus.Solidity.plus.Project.BOOKWARE-iLEARN__yqHRnY/UDEMY.Become.a.Blockchain.Developer.Ethereum.plus.Solidity.plus.Project.BOOKWARE-iLEARN
+                                                   .snapshots/5625/snapshot/books_etc/tmp_training_complete/UDEMY.Become.a.Blockchain.Developer.Ethereum.plus.Solidity.plus.Project.BOOKWARE-iLEARN
+         2           28       2.4 GB       2.4 GB  .snapshots/5625/snapshot/books_etc/tmp_STL_complete/Wicked Marvel Iron Man 2023 3D STL/Wicked Marvel Iron Man 2023 416mm No Supports
+                                                   .snapshots/5625/snapshot/books_etc/tmp_STL_complete/Wicked Marvel Iron Man 2023 Close and Open Armour Sculpture Statue Model Design 3D STL/WICKED - Ironman Statue - Close and Open Armor 416mm (Non Supported)
+         2           18       2.2 GB       2.2 GB  .snapshots/5625/snapshot/books_etc/tmp_STL_complete/B3dserk Batman 1989 Michael Keaton Sculpture Statue Model 3D STL/B3DSERK - Batman Statue 1989 312mm (Pre Supported STL)/50
+                                                   .snapshots/5625/snapshot/books_etc/tmp_STL_complete/B3dserk DC Batman 1989 Michael Keaton Sculpture Figure Statue Model Design 3D STL/B3DSERK - Batman Statue 1989 312mm (Pre Supported STL)/50
+         3           21     905.3 MB       1.8 GB  .snapshots/5625/snapshot/books_etc/tmp_instructional_complete/Udemy.Smartphone.Filmmaking.BOOKWARE-SOFTiMAGE
+                                                   .snapshots/5625/snapshot/books_etc/tmp_instructional_complete/Udemy.Smartphone.Filmmaking.BOOKWARE-SOFTiMAGE__HUNCC2/Udemy.Smartphone.Filmmaking.BOOKWARE-SOFTiMAGE
+                                                   .snapshots/5625/snapshot/books_etc/tmp_training_complete/Udemy.Smartphone.Filmmaking.BOOKWARE-SOFTiMAGE
+         2           39       1.7 GB       1.7 GB  .snapshots/5625/snapshot/books_etc/tmp_instructional_complete/Udemy.Mastering.JavaScript.and.jQuery.Course.Beginners.to.Advanced.BOOKWARE-BOOKTIME
+                                                   .snapshots/5625/snapshot/books_etc/tmp_training_complete/Udemy.Mastering.JavaScript.and.jQuery.Course.Beginners.to.Advanced.BOOKWARE-BOOKTIME
+         2           13       1.4 GB       1.4 GB  .snapshots/5625/snapshot/books_etc/tmp_instructional_complete/Linkedin.Learning.JavaScript.Essential.Training.UPDATED.June.2024.BOOKWARE-SCHOLASTiC
+                                                   .snapshots/5625/snapshot/books_etc/tmp_training_complete/Linkedin.Learning.JavaScript.Essential.Training.UPDATED.June.2024.BOOKWARE-SCHOLASTiC
+         2           32       1.4 GB       1.4 GB  .snapshots/5625/snapshot/books_etc/tmp_instructional_complete/Udemy.Complete.JavaScript.Programming.From.Novice.to.Expert.BOOKWARE-LBWx
+                                                   .snapshots/5625/snapshot/books_etc/tmp_training_complete/Udemy.Complete.JavaScript.Programming.From.Novice.to.Expert.BOOKWARE-LBWx
+         4           14     458.2 MB       1.3 GB  .snapshots/5625/snapshot/books_etc/tmp_STL_complete/Wicked Marvel Iron Man and Tony Stark Sculptures Diorama Model 3D STL
+                                                   .snapshots/5625/snapshot/books_etc/tmp_STL_complete/Wicked Marvel Tony Stark Wall Iron Man Avengers Statue Figure 3D STL
+                                                   .snapshots/5625/snapshot/books_etc/tmp_books_complete/Wicked Marvel Iron Man and Tony Stark Sculptures Diorama Model 3D STL
+                                                   .snapshots/5625/snapshot/books_etc/tmp_books_complete/Wicked Marvel Tony Stark Wall Iron Man Avengers Statue Figure 3D STL
+         2           27       1.2 GB       1.2 GB  .snapshots/5625/snapshot/books_etc/tmp_instructional_complete/Udemy.The.Modern.JavaScript.for.Beginners.BOOKWARE-LBWx
+                                                   .snapshots/5625/snapshot/books_etc/tmp_training_complete/Udemy.The.Modern.JavaScript.for.Beginners.BOOKWARE-LBWx
+         2           17       1.1 GB       1.1 GB  .snapshots/5625/snapshot/books_etc/tmp_STL_complete/B3dserk Batman 1989 Michael Keaton Sculpture Statue Model 3D STL/B3DSERK - Batman 1989 Statue 312mm (One Piece)
+                                                   .snapshots/5625/snapshot/books_etc/tmp_STL_complete/B3dserk DC Batman 1989 Michael Keaton Sculpture Figure Statue Model Design 3D STL/B3DSERK - Batman 1989 Statue 312mm (One Piece)
+         2           72     996.7 MB     996.7 MB  .snapshots/5625/snapshot/books_etc/tmp_books_complete/Udemy.ChatGPT.Content.Writing.for.Freelance.Copywriting.Ethical.BOOKWARE-BOOKTIME
+                                                   .snapshots/5625/snapshot/books_etc/tmp_training_complete/Udemy.ChatGPT.Content.Writing.for.Freelance.Copywriting.Ethical.BOOKWARE-BOOKTIME
+         2           72     995.4 MB     995.4 MB  .snapshots/5625/snapshot/books_etc/tmp_instructional_complete/Udemy.JavaScript.OOP.Mastering.Modern.Object.Oriented.Programming.BOOKWARE-BOOKTIME
+                                                   .snapshots/5625/snapshot/books_etc/tmp_training_complete/Udemy.JavaScript.OOP.Mastering.Modern.Object.Oriented.Programming.BOOKWARE-BOOKTIME
+         2           72     988.1 MB     988.1 MB  .snapshots/5625/snapshot/books_etc/tmp_books_complete/UDEMY.Master.Course.Rural.Management.and.Agribusiness.Management.BOOKWARE-iLEARN
+                                                   .snapshots/5625/snapshot/books_etc/tmp_training_complete/UDEMY.Master.Course.Rural.Management.and.Agribusiness.Management.BOOKWARE-iLEARN
+         2           70     968.1 MB     968.1 MB  .snapshots/5625/snapshot/books_etc/tmp_books_complete/Udemy.CSS.The.Complete.Guide.to.CSS.for.Beginners.BOOKWARE-LBWx
+                                                   .snapshots/5625/snapshot/books_etc/tmp_training_complete/Udemy.CSS.The.Complete.Guide.to.CSS.for.Beginners.BOOKWARE-LBWx
+         2           43     959.6 MB     959.6 MB  .snapshots/5625/snapshot/books_etc/tmp_STL_complete/Persona + Shin Megami Tensei Series Models Collection 3D STL
+                                                   .snapshots/5625/snapshot/books_etc/tmp_books_complete/Persona + Shin Megami Tensei Series Models Collection 3D STL
+
+  DUPLICATED SECTIONS — WITHIN the latest FULL generation (.snapshots/5620/snapshot, 9,963,922 files) — the latest one holds only 313,727
+    duplicated identities (>= floor): 81,513; naive redundant bytes across ALL of them (nested copies counted repeatedly): 19.3 TB
+    top 25 MAXIMAL sections by redundant bytes (parent not itself duplicated):
+    places        files   bytes/copy    redundant  where
+         3      146,186     310.5 GB     621.0 GB  .snapshots/5620/snapshot/Backups/media9/ExtremeSSD1/calibre
+                                                   .snapshots/5620/snapshot/Backups/mediaD/BackupOfExtremeSSD1/ExtremeSSD1/calibre
+                                                   .snapshots/5620/snapshot/Backups/mediaE/n2/ExtremeSSD1/calibre
+         5       23,794     116.2 GB     464.7 GB  .snapshots/5620/snapshot/Backups/media8/media0/calibre/T/18b
+                                                   .snapshots/5620/snapshot/Backups/media8/media0/calibre/T/18c
+                                                   .snapshots/5620/snapshot/Backups/media8/media0/calibre/T/18d
+                                                   .snapshots/5620/snapshot/Backups/media9/BFD000/CALIBRE0 (Selective Sync Conflict)/C/T
+                                                   ... and 1 more
+         2      166,044     324.2 GB     324.2 GB  .snapshots/5620/snapshot/Backups/media9/ExtremeSSD1
+                                                   .snapshots/5620/snapshot/Backups/mediaD/BackupOfExtremeSSD1/ExtremeSSD1
+         3        1,489     152.2 GB     304.3 GB  .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/OLD/Torrents.Z
+                                                   .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/media3/OLD/Torrents.Z
+                                                   .snapshots/5620/snapshot/Backups/media8/media0/_BACKUP_5/_BACKUP/torrents_not_quite_processed/Torrents.Z
+         2       38,330     298.6 GB     298.6 GB  .snapshots/5620/snapshot/Backups/MEDIAB2/WD000/MusicFiles
+                                                   .snapshots/5620/snapshot/Backups/media9/WD001/MusicFiles
+         2        1,813     239.3 GB     239.3 GB  .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/OLD
+                                                   .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/media3/OLD
+         6       15,102      42.1 GB     210.6 GB  .snapshots/5620/snapshot/Backups/media8/media0/calibre/tmpV/22a
+                                                   .snapshots/5620/snapshot/Backups/media8/media0/calibre/tmpV/22b
+                                                   .snapshots/5620/snapshot/Backups/media8/media0/calibre/tmpV/22c
+                                                   .snapshots/5620/snapshot/Backups/media8/media0/calibre/tmpV/22d
+                                                   ... and 2 more
+         2          438     182.0 GB     182.0 GB  .snapshots/5620/snapshot/Backups/mediaE/MACMINIEXTDRIVECOPY/Insync/mykel.alvis@gmail.com/GoogleDrive/Maker/3DPrint/Loot Studios
+                                                   .snapshots/5620/snapshot/Backups/mediaE/SavedMacMiniData/20250110/Insync/mykel.alvis@gmail.com/GoogleDrive/Maker/3DPrint/Loot Studios
+         3       32,907      74.3 GB     148.6 GB  .snapshots/5620/snapshot/Backups/MEDIAB2/Seagate_Replica/Calibre/Books/Staging
+                                                   .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/media3/Torrents/Books/Staging
+                                                   .snapshots/5620/snapshot/Backups/media9/WD001/Calibre/Books/Staging
+         4        2,699      43.2 GB     129.7 GB  .snapshots/5620/snapshot/Backups/MEDIAB2/Seagate_Replica/Calibre/TimeToAdd/Complete IT Books Pack
+                                                   .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/Torrents/TimeToAdd/Complete IT Books Pack
+                                                   .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/media3/Torrents/TimeToAdd/Complete IT Books Pack
+                                                   .snapshots/5620/snapshot/Backups/media9/WD001/CurrentTorrents/A_D/Complete IT Books Pack
+         2           84     128.2 GB     128.2 GB  .snapshots/5620/snapshot/Backups/MEDIAB2/Held_Movies/Blade Runner - 5 Disc Complete Collectors Edition (1080p) with Special Features
+                                                   .snapshots/5620/snapshot/HELD/Movies/Blade Runner - 5 Disc Complete Collectors Edition (1080p) with Special Features
+         3        8,472      61.7 GB     123.3 GB  .snapshots/5620/snapshot/Backups/MEDIAB2/Seagate_Replica/Calibre/Books/COMIC TORRENTS
+                                                   .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/Torrents/Books/COMIC TORRENTS
+                                                   .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/media3/Torrents/Books/COMIC TORRENTS
+         2       12,929     109.9 GB     109.9 GB  .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/media3/torrents/Sent.To.Calibre/media4_Sent.to.Calibre/Survival Library
+                                                   .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/torrents/Sent.To.Calibre/media4_Sent.to.Calibre/Survival Library
+         5           66      27.1 GB     108.3 GB  .snapshots/5620/snapshot/Backups/MEDIAB2/Seagate_Replica/Calibre/TimeToAdd/Technical/Rosseta 3.4.5 + languages
+                                                   .snapshots/5620/snapshot/Backups/MEDIAB2/WD000/Calibre/Books/Technical/Rosseta 3.4.5 + languages
+                                                   .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/Torrents/TimeToAdd/Technical/Rosseta 3.4.5 + languages
+                                                   .snapshots/5620/snapshot/Backups/media9/WD001/CurrentTorrents/S_Z/Technical/Rosseta 3.4.5 + languages
+                                                   ... and 1 more
+         9        2,901      13.5 GB     107.7 GB  .snapshots/5620/snapshot/Backups/MEDIAB2/MykelsPPort/mykel.alvis/CALIBRE0_Backup/CALIBRE0/C/tmpV/Unknown
+                                                   .snapshots/5620/snapshot/Backups/media2/calibre_20200603/calibre/tmpV/Unknown
+                                                   .snapshots/5620/snapshot/Backups/media8/media0/calibre/tmpV/14/Unknown
+                                                   .snapshots/5620/snapshot/Backups/media8/media0/calibre/tmpV/22a/Unknown
+                                                   ... and 5 more
+         3       50,901      53.0 GB     106.1 GB  .snapshots/5620/snapshot/Backups/media8/media0/calibre/V/20a
+                                                   .snapshots/5620/snapshot/Backups/media8/media0/calibre/V/20b
+                                                   .snapshots/5620/snapshot/Backups/media9/BFD000/CALIBRE0 (Selective Sync Conflict)/C/V
+         3       50,228      51.9 GB     103.8 GB  .snapshots/5620/snapshot/Backups/media8/media0/calibre/V/19a
+                                                   .snapshots/5620/snapshot/Backups/media8/media0/calibre/V/19b
+                                                   .snapshots/5620/snapshot/Backups/media9/BFD000/CALIBRE0/C/V
+         2       15,439      89.7 GB      89.7 GB  .snapshots/5620/snapshot/Backups/MEDIAB2/Seagate_Replica/Calibre/Books/Technical
+                                                   .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/media3/Torrents/Books/Technical
+        12        1,494       8.1 GB      88.8 GB  .snapshots/5620/snapshot/Backups/MEDIAB2/Seagate_Replica/Calibre/Books/TeMP/Food Science and Technology
+                                                   .snapshots/5620/snapshot/Backups/MEDIAB2/Seagate_Replica/Calibre/Books/Technical/Food Science and Technology
+                                                   .snapshots/5620/snapshot/Backups/MEDIAB2/Seagate_Replica/Calibre/TimeToAdd/Food Science and Technology
+                                                   .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/Torrents/Books/TeMP/Food Science and Technology
+                                                   ... and 8 more
+         2          682      88.0 GB      88.0 GB  .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/SeagateCopy1
+                                                   .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/media3/SeagateCopy1
+         3          260      42.6 GB      85.2 GB  .snapshots/5620/snapshot/Backups/MEDIAB2/Seagate_Replica/Calibre/TimeToAdd/Grandson of Graphic Novels, Hardcovers and Trade Paperbacks
+                                                   .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/Torrents/TimeToAdd/Grandson of Graphic Novels, Hardcovers and Trade Paperbacks
+                                                   .snapshots/5620/snapshot/Backups/media9/WD001/CurrentTorrents/E_H/Grandson of Graphic Novels, Hardcovers and Trade Paperbacks
+         3        1,027      41.0 GB      82.0 GB  .snapshots/5620/snapshot/Backups/MEDIAB2/Seagate_Replica/Calibre/TimeToAdd/Popular Mechanics
+                                                   .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/Torrents/TimeToAdd/Popular Mechanics
+                                                   .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/Torrents/Transfer/ImportNow/Periodicals_HM_Nature_PM/Popular Mechanics
+         2           53      75.6 GB      75.6 GB  .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/media3/torrents/Sent.To.Calibre/media4_Sent.to.Calibre/Sent.To.Calibre/Mega Folder
+                                                   .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/torrents/Sent.To.Calibre/media4_Sent.to.Calibre/Sent.To.Calibre/Mega Folder
+         2        3,985      74.6 GB      74.6 GB  .snapshots/5620/snapshot/Backups/MEDIAB2/HD-PZU3/EXTFAD006/Ebooks/Great Science Textbooks Library
+                                                   .snapshots/5620/snapshot/Backups/media8/media0/_BACKUP_B/_BACKUP/mediaB/EXTFAD001/Books/Ebooks/Great Science Textbooks Library
+         5          415      18.6 GB      74.3 GB  .snapshots/5620/snapshot/Backups/media1/_BACKUP/tmp/Video-HELD/Torrents.Z/_Later/White.Collar.S02.720p.HDTV.x264
+                                                   .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/OLD/Torrents.Z/_Later/White.Collar.S02.720p.HDTV.x264
+                                                   .snapshots/5620/snapshot/Backups/media2/_BACKUP/Books/media3/OLD/Torrents.Z/_Later/White.Collar.S02.720p.HDTV.x264
+                                                   .snapshots/5620/snapshot/Backups/media8/media0/_BACKUP_2/_BACKUP/Working/tmp/EXTFAD002/Video-HELD/Torrents.Z/_Later/White.Collar.S02.720p.HDTV.x264
+                                                   ... and 1 more
