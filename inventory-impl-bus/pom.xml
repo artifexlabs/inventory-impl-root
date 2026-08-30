@@ -41,10 +41,15 @@
       <groupId>io.artifexlabs.inventory</groupId>
       <artifactId>inventory-api</artifactId>
     </dependency>
-    <dependency><!-- QrCodes: the labels worker renders the code the printer prints -->
-      <groupId>io.artifexlabs.inventory</groupId>
-      <artifactId>inventory-impl-printer-common</artifactId>
-      <version>${project.version}</version>
+    <dependency><!-- QrImages: the served QR PNG. The printer layer is NOT a dependency of
+           the bus (2026-08-30): the verticle that speaks printer packets lives here, and
+           the drivers are wired in by the apps. -->
+      <groupId>com.google.zxing</groupId>
+      <artifactId>core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.google.zxing</groupId>
+      <artifactId>javase</artifactId>
     </dependency>
     <dependency>
       <groupId>io.vertx</groupId>

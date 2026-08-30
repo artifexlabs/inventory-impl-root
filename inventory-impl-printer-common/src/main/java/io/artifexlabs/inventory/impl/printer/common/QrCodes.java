@@ -17,33 +17,19 @@
  */
 package io.artifexlabs.inventory.impl.printer.common;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-
 import com.google.zxing.BarcodeFormat;
 import com.google.zxing.WriterException;
-import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 
 /**
- * ULID ids were chosen for compact QR codes; this renders them. Pure function, no state. Lives in impl so the label
- * worker renders where the printing happens; the HTTP tier asks over the bus.
+ * ULID ids were chosen for compact QR codes; this renders them the way a PRINTER needs them — a bare module grid at an
+ * exact integer scale. Pure function, no state. The served PNG (with its quiet-zone margin) is {@code QrImages} in
+ * impl-bus; it left here on 2026-08-30 so the printer layer depends on nothing but the api.
  */
 public final class QrCodes {
 
   private QrCodes() {
-  }
-
-  public static byte[] png(String text, int sizePixels) {
-    try {
-      BitMatrix matrix = new QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, sizePixels, sizePixels);
-      ByteArrayOutputStream out = new ByteArrayOutputStream();
-      MatrixToImageWriter.writeToStream(matrix, "PNG", out);
-      return out.toByteArray();
-    } catch (WriterException | IOException e) {
-      throw new RuntimeException("QR generation failed for: " + text, e);
-    }
   }
 
   /**

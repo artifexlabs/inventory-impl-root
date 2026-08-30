@@ -32,8 +32,9 @@
   <name>${project.artifactId}</name>
   <description>The Brother PT-P750W label printer: raster-protocol encoder and
     the tape-width-aware format mappings (standard/standard-qr = 12 mm,
-    large = 24 mm, tiny = 9 mm, qr-only = any). Depends on core for the
-    module-exact QR rendering (QrCodes).</description>
+    large = 24 mm, tiny = 9 mm, qr-only = any). Depends on the api and on
+    printer-common (composer, transport, module-exact QR rendering) and on
+    nothing else in the train.</description>
 
   <dependencies>
     <dependency>
@@ -43,11 +44,6 @@
     <dependency>
       <groupId>io.artifexlabs.inventory</groupId>
       <artifactId>inventory-impl-printer-common</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>io.artifexlabs.inventory</groupId>
-      <artifactId>inventory-impl</artifactId>
       <version>${project.version}</version>
     </dependency>
     <dependency>

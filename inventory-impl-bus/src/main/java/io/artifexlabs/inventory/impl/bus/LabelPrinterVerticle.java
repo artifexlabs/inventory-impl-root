@@ -15,7 +15,7 @@
  * limitations under the License.
  * @formatter:on
  */
-package io.artifexlabs.inventory.impl.printer.common;
+package io.artifexlabs.inventory.impl.bus;
 
 import io.artifexlabs.inventory.api.bus.PrintPackets;
 

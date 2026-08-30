@@ -24,7 +24,6 @@ import java.util.concurrent.CompletionStage;
 
 import io.artifexlabs.inventory.api.DefaultAuditEvent;
 import io.artifexlabs.inventory.api.bus.BusActions;
-import io.artifexlabs.inventory.impl.printer.common.QrCodes;
 import io.artifexlabs.inventory.api.Ulid;
 
 import io.vertx.core.json.JsonObject;
@@ -80,7 +79,7 @@ public class LabelsVerticle extends ServiceVerticle {
       String url = requireUrl(env);
       int size = env.data().getInteger("size", DEFAULT_QR_PIXELS);
       // storage answers 404 itself when the item is unknown
-      return item(env, id).thenApply(i -> (Object) new JsonObject().put("png", QrCodes.png(url, size)));
+      return item(env, id).thenApply(i -> (Object) new JsonObject().put("png", QrImages.png(url, size)));
     });
     on(BusActions.LABELS_PRINT, env -> {
       String id = requireTarget(env);
@@ -89,7 +88,7 @@ public class LabelsVerticle extends ServiceVerticle {
       String principal = env.principal();
       String actor = env.userId();
       return item(env, id).thenCompose(item -> send(PrintPackets.PRINT,
-          PrintPackets.attribute(PrintPackets.label(item, url, format, QrCodes.png(url, DEFAULT_QR_PIXELS)), actor,
+          PrintPackets.attribute(PrintPackets.label(item, url, format, QrImages.png(url, DEFAULT_QR_PIXELS)), actor,
               env.requestId()))
           .thenCompose(
               ack -> record(env, "label.print", id, new JsonObject().put("accepted", accepted(ack))).thenApply(v -> {
@@ -124,7 +123,7 @@ public class LabelsVerticle extends ServiceVerticle {
         if (url == null || url.isBlank())
           throw BusServiceException.badRequest("no scan url supplied for item " + id);
         collected = collected.thenCompose(acc -> item(env, id).thenApply(found -> {
-          acc.add(PrintPackets.label(found, url, format, QrCodes.png(url, DEFAULT_QR_PIXELS)));
+          acc.add(PrintPackets.label(found, url, format, QrImages.png(url, DEFAULT_QR_PIXELS)));
           return acc;
         }));
       }

@@ -75,8 +75,7 @@ public final class BusWorkers {
         vertx.deployVerticle(new LabelsVerticle(guard), workerThread),
         // the printer is reached over the bus now (PLAN.md Phase 21): it composes
         // and rasterizes, which is CPU work that must stay off the event loop
-        vertx.deployVerticle(new io.artifexlabs.inventory.impl.printer.common.LabelPrinterVerticle(s.printer(), status,
-            s.inventory()::getItem), workerThread),
+        vertx.deployVerticle(new LabelPrinterVerticle(s.printer(), status, s.inventory()::getItem), workerThread),
         // catalog lookups block on external HTTP: keep them off the event loop
         vertx.deployVerticle(new CatalogVerticle(guard, s.catalog()), workerThread),
         vertx.deployVerticle(new UsersVerticle(guard)), vertx.deployVerticle(new TokensVerticle(guard)),
