@@ -166,10 +166,12 @@ public class PgAssetStore implements AssetStore {
           .flatMap(v -> spec.containerId() == null ? Uni.createFrom().voidItem()
               : audit(conn, pending, "item.contain", item.getId(),
                   new JsonObject().put("containerId", spec.containerId())))
-          // the atomic claim: a conflicting marker fails the WHOLE creation
+          // the atomic claim, per inventory since Phase 27's reservation:
+          // a conflicting marker fails the WHOLE creation
           .flatMap(v -> conn.preparedQuery("""
-              INSERT INTO item_identities (kind, value, item_id) VALUES ('upc', $1, $2)
-              ON CONFLICT (kind, value) DO NOTHING""").execute(Tuple.of(spec.gtin13(), item.getId())))
+              INSERT INTO item_identities (kind, value, item_id, inventory_id)
+              SELECT 'upc', $1, id, inventory_id FROM items WHERE id=$2
+              ON CONFLICT (inventory_id, kind, value) DO NOTHING""").execute(Tuple.of(spec.gtin13(), item.getId())))
           .flatMap(rs -> rs.rowCount() == 1
               ? audit(conn, pending, "item.identity-add", item.getId(),
                   new io.artifexlabs.inventory.api.ItemIdentity("upc", spec.gtin13()).toJson())

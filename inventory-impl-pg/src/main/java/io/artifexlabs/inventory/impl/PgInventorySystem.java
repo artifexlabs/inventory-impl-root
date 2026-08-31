@@ -290,16 +290,23 @@ public class PgInventorySystem implements InventorySystem {
   @Override
   public CompletionStage<Boolean> addIdentity(String itemId, io.artifexlabs.inventory.api.ItemIdentity identity) {
     AuditEvent added = event("item.identity-add", itemId, identity.toJson());
-    // the INSERT is the atomic claim; the follow-up SELECT only explains a
-    // conflict, so no concurrent claimer can slip between check and claim
+    // the INSERT is the atomic claim — per INVENTORY since Phase 27's
+    // reservation (the PK is (inventory_id, kind, value)), the inventory
+    // riding in from the item's own row; the follow-up SELECT only explains
+    // a conflict, so no concurrent claimer can slip between check and claim
     CompletionStage<Claim> tx = this.pool
         .withTransaction(conn -> exists(conn, itemId).flatMap(ok -> !ok ? Uni.createFrom().nullItem()
             : conn.preparedQuery("""
-                INSERT INTO item_identities (kind, value, item_id) VALUES ($1, $2, $3)
-                ON CONFLICT (kind, value) DO NOTHING""").execute(Tuple.of(identity.kind(), identity.value(), itemId))
+                INSERT INTO item_identities (kind, value, item_id, inventory_id)
+                SELECT $1, $2, id, inventory_id FROM items WHERE id=$3
+                ON CONFLICT (inventory_id, kind, value) DO NOTHING""")
+                .execute(Tuple.of(identity.kind(), identity.value(), itemId))
                 .flatMap(rs -> rs.rowCount() == 1 ? audit(conn, added).map(v -> Claim.ADDED)
-                    : conn.preparedQuery("SELECT item_id FROM item_identities WHERE kind=$1 AND value=$2")
-                        .execute(Tuple.of(identity.kind(), identity.value())).flatMap(cur -> {
+                    : conn.preparedQuery("""
+                        SELECT item_id FROM item_identities
+                        WHERE inventory_id=(SELECT inventory_id FROM items WHERE id=$3)
+                          AND kind=$1 AND value=$2""").execute(Tuple.of(identity.kind(), identity.value(), itemId))
+                        .flatMap(cur -> {
                           String claimed = cur.iterator().next().getString("item_id");
                           return claimed.equals(itemId) ? Uni.createFrom().item(Claim.IDEMPOTENT)
                               : Uni.createFrom().failure(new IllegalStateException("identity " + identity.kind() + ":"
@@ -327,7 +334,10 @@ public class PgInventorySystem implements InventorySystem {
 
   @Override
   public CompletionStage<Optional<Item>> findByIdentity(String kind, String value) {
-    // normalize exactly as storage did (kind lowercased, both trimmed)
+    // normalize exactly as storage did (kind lowercased, both trimmed).
+    // Resolution is deliberately GLOBAL: a scanned marker looks up across
+    // inventories until Phase 27's enforcement adds visibility scoping —
+    // with only the seeded default inventory there is at most one row.
     var identity = new io.artifexlabs.inventory.api.ItemIdentity(kind, value);
     return this.pool.preparedQuery("SELECT item_id FROM item_identities WHERE kind=$1 AND value=$2")
         .execute(Tuple.of(identity.kind(), identity.value())).flatMap(rs -> {

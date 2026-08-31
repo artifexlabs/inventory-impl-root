@@ -17,7 +17,47 @@ databaseChangeLog:
         old locations table and item_containment join table are gone — a
         location is simply a container that carries coordinates, and items
         without their own coordinates inherit the nearest ancestor's.
+
+        Tenancy (reserved 2026-08-31, PLAN.md Phase 27): every item belongs
+        to exactly one inventory, and the zero-ULID "default" inventory is
+        seeded so a single-tenant install never notices. Markers are unique
+        per inventory, not globally. Enforcement — membership, scoped
+        queries — is deferred; the columns are not, because this file stops
+        being editable the first time a database anyone cares about runs it.
       changes:
+        # who an item belongs to; enforcement arrives with Phase 27, the
+        # seeded default makes the column invisible until then
+        - createTable:
+            tableName: inventories
+            columns:
+              - column:
+                  name: id
+                  type: varchar(26)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: name
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: ts
+                  type: timestamptz
+                  constraints:
+                    nullable: false
+        - insert:
+            tableName: inventories
+            columns:
+              - column:
+                  name: id
+                  value: "00000000000000000000000000"
+              - column:
+                  name: name
+                  value: "default"
+              - column:
+                  name: ts
+                  valueComputed: now()
         - createTable:
             tableName: items
             columns:
@@ -114,6 +154,14 @@ databaseChangeLog:
                   type: timestamptz
                   constraints:
                     nullable: false
+              # the tenancy reservation: exactly one owning inventory (the
+              # zero-ULID default until Phase 27's enforcement arrives)
+              - column:
+                  name: inventory_id
+                  type: varchar(26)
+                  defaultValue: "00000000000000000000000000"
+                  constraints:
+                    nullable: false
         - addForeignKeyConstraint:
             baseTableName: items
             baseColumnNames: container_id
@@ -121,6 +169,18 @@ databaseChangeLog:
             referencedColumnNames: id
             constraintName: fk_items_container
             onDelete: SET NULL
+        - addForeignKeyConstraint:
+            baseTableName: items
+            baseColumnNames: inventory_id
+            referencedTableName: inventories
+            referencedColumnNames: id
+            constraintName: fk_items_inventory
+        - createIndex:
+            tableName: items
+            indexName: idx_items_inventory
+            columns:
+              - column:
+                  name: inventory_id
         - createIndex:
             tableName: items
             indexName: idx_items_type
@@ -164,13 +224,26 @@ databaseChangeLog:
             columns:
               - column:
                   name: tag_key
-        # Physical markers resolving to items: one (kind, value) -> item_id
-        # mapping for every marker type (nfc-uid, upc, foreign qr, ...), the
-        # same shape as user_identities(provider, subject) rather than a
-        # bespoke column per marker. A marker claims at most one item.
+        # Physical markers resolving to items: one (inventory, kind, value)
+        # -> item_id mapping for every marker type (nfc-uid, upc, foreign
+        # qr, ...), the same shape as user_identities(provider, subject)
+        # rather than a bespoke column per marker. WITHIN an inventory a
+        # marker claims at most one item; two inventories may each claim the
+        # same class-level marker — both own the banana UPC (owner,
+        # 2026-08-31, Phase 27). inventory_id is denormalized from the
+        # item's row because a primary key cannot span a join; whatever
+        # transfers an item between inventories must move its markers too.
         - createTable:
             tableName: item_identities
             columns:
+              - column:
+                  name: inventory_id
+                  type: varchar(26)
+                  defaultValue: "00000000000000000000000000"
+                  constraints:
+                    nullable: false
+                    references: inventories(id)
+                    foreignKeyName: fk_item_identities_inventory
               - column:
                   name: kind
                   type: text
@@ -191,7 +264,7 @@ databaseChangeLog:
                     deleteCascade: true
         - addPrimaryKey:
             tableName: item_identities
-            columnNames: kind, value
+            columnNames: inventory_id, kind, value
             constraintName: pk_item_identities
         # list an item's markers without a full scan
         - createIndex:

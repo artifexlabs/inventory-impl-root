@@ -6,6 +6,10 @@ databaseChangeLog:
         Users, the bearer tokens that guard the API, and federated identities.
         (provider, subject) is the stable key — email is profile data, because
         providers like Apple hand out per-app relay addresses.
+
+        inventory_members (2026-08-31, PLAN.md Phase 27) records who belongs
+        to which inventory, and as what. It is a reservation: nothing reads
+        it until the phase's enforcement steps land.
       changes:
         - createTable:
             tableName: users
@@ -91,6 +95,43 @@ databaseChangeLog:
         - createIndex:
             tableName: user_identities
             indexName: idx_identities_user
+            columns:
+              - column:
+                  name: user_id
+        # The tenancy reservation (PLAN.md Phase 27): membership, recorded
+        # but not yet enforced. role stays free text until the phase decides
+        # the vocabulary (owner/member/reader is the working guess).
+        - createTable:
+            tableName: inventory_members
+            columns:
+              - column:
+                  name: inventory_id
+                  type: varchar(26)
+                  constraints:
+                    nullable: false
+                    references: inventories(id)
+                    foreignKeyName: fk_members_inventory
+                    deleteCascade: true
+              - column:
+                  name: user_id
+                  type: varchar(26)
+                  constraints:
+                    nullable: false
+                    references: users(id)
+                    foreignKeyName: fk_members_user
+                    deleteCascade: true
+              - column:
+                  name: role
+                  type: text
+                  constraints:
+                    nullable: false
+        - addPrimaryKey:
+            tableName: inventory_members
+            columnNames: inventory_id, user_id
+            constraintName: pk_inventory_members
+        - createIndex:
+            tableName: inventory_members
+            indexName: idx_members_user
             columns:
               - column:
                   name: user_id
